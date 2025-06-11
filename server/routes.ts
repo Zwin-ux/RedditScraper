@@ -18,8 +18,14 @@ import { reliableScraper } from "./reliable-scraper";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize subreddits on startup
-  await initializeSubreddits();
+  // Initialize subreddits on startup with error handling
+  try {
+    await initializeSubreddits();
+    console.log("Successfully initialized subreddits");
+  } catch (error) {
+    console.error("Failed to initialize subreddits:", error);
+    // Continue without subreddit initialization to allow server to start
+  }
   
   // Comprehensive r/datascience analysis endpoint - SerpAPI only (no OpenAI)
   app.post("/api/analyze-datascience", async (req, res) => {
