@@ -68,7 +68,6 @@ export class DatabaseStorage implements IStorage {
     limit?: number;
     offset?: number;
   }): Promise<Creator[]> {
-    let query = db.select().from(creators);
     const conditions = [];
 
     if (filters?.subreddit) {
@@ -93,21 +92,20 @@ export class DatabaseStorage implements IStorage {
       conditions.push(like(creators.username, `%${filters.search}%`));
     }
 
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+    const baseQuery = db.select().from(creators);
+    
+    if (conditions.length === 0) {
+      return await baseQuery
+        .orderBy(desc(creators.engagementScore))
+        .limit(filters?.limit || 50)
+        .offset(filters?.offset || 0);
     }
 
-    query = query.orderBy(desc(creators.engagementScore));
-
-    if (filters?.limit) {
-      query = query.limit(filters.limit);
-    }
-
-    if (filters?.offset) {
-      query = query.offset(filters.offset);
-    }
-
-    return await query;
+    return await baseQuery
+      .where(and(...conditions))
+      .orderBy(desc(creators.engagementScore))
+      .limit(filters?.limit || 50)
+      .offset(filters?.offset || 0);
   }
 
   async getCreator(id: number): Promise<CreatorWithRecentActivity | undefined> {
@@ -132,10 +130,7 @@ export class DatabaseStorage implements IStorage {
   async createCreator(insertCreator: InsertCreator): Promise<Creator> {
     const [creator] = await db
       .insert(creators)
-      .values({
-        ...insertCreator,
-        updatedAt: new Date()
-      })
+      .values(insertCreator)
       .returning();
     return creator;
   }
@@ -143,10 +138,7 @@ export class DatabaseStorage implements IStorage {
   async updateCreator(id: number, updates: Partial<InsertCreator>): Promise<Creator> {
     const [creator] = await db
       .update(creators)
-      .set({
-        ...updates,
-        updatedAt: new Date()
-      })
+      .set(updates)
       .where(eq(creators.id, id))
       .returning();
     return creator;

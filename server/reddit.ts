@@ -1,4 +1,3 @@
-import { spawn } from 'child_process';
 import { analyzeCreatorContent, analyzePostRelevance } from './openai';
 import { storage } from './storage';
 
@@ -39,98 +38,53 @@ export async function crawlSubreddit(subredditName: string, limit = 100): Promis
   posts: RedditPost[];
   creators: Set<string>;
 }> {
-  return new Promise((resolve, reject) => {
-    // Create a Python script to use PRAW for Reddit data
-    const pythonScript = `
-import praw
-import json
-import sys
-import os
-from datetime import datetime
+  try {
+    // Use Reddit's JSON API (no auth required for public content)
+    const response = await fetch(`https://www.reddit.com/r/${subredditName}/hot.json?limit=${limit}`, {
+      headers: {
+        'User-Agent': 'RedditCreatorAgent/1.0'
+      }
+    });
 
-# Reddit API credentials from environment
-reddit = praw.Reddit(
-    client_id=os.getenv('REDDIT_CLIENT_ID', 'your_client_id'),
-    client_secret=os.getenv('REDDIT_CLIENT_SECRET', 'your_client_secret'),
-    user_agent='RedditCreatorAgent/1.0 by YourUsername'
-)
-
-try:
-    subreddit = reddit.subreddit('${subredditName}')
-    posts_data = []
-    creators = set()
-    
-    # Get top posts from the last week
-    for post in subreddit.hot(limit=${limit}):
-        if not post.stickied and post.author:
-            post_data = {
-                'id': post.id,
-                'title': post.title,
-                'content': post.selftext if hasattr(post, 'selftext') else '',
-                'author': post.author.name,
-                'subreddit': subreddit.display_name,
-                'upvotes': post.score,
-                'awards': post.total_awards_received,
-                'url': f"https://reddit.com{post.permalink}",
-                'created_utc': post.created_utc
-            }
-            posts_data.append(post_data)
-            creators.add(post.author.name)
-    
-    result = {
-        'posts': posts_data,
-        'creators': list(creators)
+    if (!response.ok) {
+      throw new Error(`Reddit API request failed: ${response.status} ${response.statusText}`);
     }
-    
-    print(json.dumps(result))
-    
-except Exception as e:
-    print(json.dumps({'error': str(e)}), file=sys.stderr)
-    sys.exit(1)
-`;
 
-    const pythonProcess = spawn('python3', ['-c', pythonScript], {
-      env: {
-        ...process.env,
-        REDDIT_CLIENT_ID: process.env.REDDIT_CLIENT_ID || process.env.PRAW_CLIENT_ID,
-        REDDIT_CLIENT_SECRET: process.env.REDDIT_CLIENT_SECRET || process.env.PRAW_CLIENT_SECRET
-      }
-    });
+    const data = await response.json();
+    const posts: RedditPost[] = [];
+    const creators = new Set<string>();
 
-    let stdout = '';
-    let stderr = '';
-
-    pythonProcess.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    pythonProcess.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    pythonProcess.on('close', (code) => {
-      if (code !== 0) {
-        console.error('Python script error:', stderr);
-        reject(new Error(`Reddit crawling failed: ${stderr}`));
-        return;
-      }
-
-      try {
-        const result = JSON.parse(stdout);
-        if (result.error) {
-          reject(new Error(result.error));
-          return;
+    if (data?.data?.children) {
+      for (const child of data.data.children) {
+        const post = child.data;
+        
+        // Skip stickied posts and posts without authors
+        if (post.stickied || !post.author || post.author === '[deleted]') {
+          continue;
         }
 
-        const posts = result.posts || [];
-        const creators = new Set(result.creators || []);
-        
-        resolve({ posts, creators });
-      } catch (error) {
-        reject(new Error('Failed to parse Reddit API response'));
+        const redditPost: RedditPost = {
+          id: post.id,
+          title: post.title,
+          content: post.selftext || '',
+          author: post.author,
+          subreddit: post.subreddit,
+          upvotes: post.score,
+          awards: post.total_awards_received || 0,
+          url: `https://reddit.com${post.permalink}`,
+          created_utc: post.created_utc
+        };
+
+        posts.push(redditPost);
+        creators.add(post.author);
       }
-    });
-  });
+    }
+
+    return { posts, creators };
+  } catch (error) {
+    console.error(`Failed to crawl r/${subredditName}:`, error);
+    throw new Error(`Reddit crawling failed: ${error.message}`);
+  }
 }
 
 export async function calculateEngagementScore(creatorData: RedditCreatorData): Promise<number> {
