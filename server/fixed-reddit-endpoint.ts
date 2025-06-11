@@ -148,8 +148,10 @@ export function addFixedRedditEndpoint(app: Express) {
           }
           
           const existing = await storage.getCreatorByUsername(creator.username);
+          let creatorId: number;
+          
           if (!existing) {
-            await storage.createCreator({
+            const newCreator = await storage.createCreator({
               username: creator.username,
               platform: "Reddit",
               subreddit,
@@ -160,8 +162,34 @@ export function addFixedRedditEndpoint(app: Express) {
               lastActive: new Date(),
               postsCount: creator.posts,
             });
+            creatorId = newCreator.id;
             stored++;
             console.log(`Stored verified Reddit creator: ${creator.username}`);
+          } else {
+            creatorId = existing.id;
+          }
+          
+          // Store actual posts for this creator
+          for (const post of creator.recentPosts.slice(0, 3)) {
+            try {
+              const redditId = post.link ? post.link.split('/').pop() || `${subreddit}_${Date.now()}` : `${subreddit}_${Date.now()}`;
+              await storage.createPost({
+                creatorId,
+                title: post.title || 'Untitled Post',
+                content: post.content || '',
+                subreddit,
+                upvotes: post.score || 0,
+                awards: post.awards || 0,
+                redditId,
+                redditUrl: post.link || `https://reddit.com/r/${subreddit}`,
+              });
+              console.log(`Stored post: ${post.title?.substring(0, 50)}...`);
+            } catch (error) {
+              // Skip duplicate posts (redditId constraint)
+              if (!error.message?.includes('duplicate')) {
+                console.error(`Failed to store post:`, error);
+              }
+            }
           }
         } catch (error) {
           console.error(`Failed to store creator ${creator.username}:`, error);

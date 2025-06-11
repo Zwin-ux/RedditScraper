@@ -821,6 +821,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get posts for a specific creator
+  app.get("/api/creators/:id/posts", async (req, res) => {
+    try {
+      const creatorId = parseInt(req.params.id, 10);
+      const { limit = "10" } = req.query;
+      
+      if (isNaN(creatorId)) {
+        return res.status(400).json({ message: "Invalid creator ID" });
+      }
+      
+      const posts = await storage.getPostsByCreator(creatorId, parseInt(limit as string));
+      res.json(posts);
+    } catch (error) {
+      console.error("Failed to get creator posts:", error);
+      res.status(500).json({ message: "Failed to fetch creator posts" });
+    }
+  });
+
   // Get subreddits
   app.get("/api/subreddits", async (req, res) => {
     try {
