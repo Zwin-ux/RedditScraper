@@ -18,6 +18,7 @@ import type { Creator } from "@shared/schema";
 export default function Dashboard() {
   const [selectedCreatorId, setSelectedCreatorId] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [subredditInput, setSubredditInput] = useState('');
   const [filters, setFilters] = useState({
     subreddit: 'all',
     tag: 'all',
@@ -59,24 +60,32 @@ export default function Dashboard() {
   });
 
   // Mutations
-  const crawlMutation = useMutation({
-    mutationFn: (data: { all?: boolean; subreddit?: string }) => api.startCrawl(data),
-    onSuccess: () => {
+  const scrapeMutation = useMutation({
+    mutationFn: (subreddit: string) => api.scrapeSubreddit(subreddit),
+    onSuccess: (data: any) => {
       toast({
-        title: "Crawl Started",
-        description: "Reddit crawling process has been initiated.",
+        title: "Scraping Complete",
+        description: `Found ${data.data?.creatorsStored || 0} creators from r/${data.data?.subreddit || subredditInput}`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/creators'] });
+      setSubredditInput('');
     },
     onError: (error: Error) => {
       toast({
-        title: "Crawl Failed",
+        title: "Scraping Failed",
         description: error.message,
         variant: "destructive",
       });
     },
   });
+
+  const handleScrapeSubreddit = () => {
+    const subreddit = subredditInput.replace(/^r\//, '').trim();
+    if (subreddit) {
+      scrapeMutation.mutate(subreddit);
+    }
+  };
 
   const exportMutation = useMutation({
     mutationFn: (format: 'json' | 'csv') => api.exportCreators(format),
@@ -229,35 +238,29 @@ export default function Dashboard() {
               <p className="text-slate-600">Monitor and manage AI creators from Reddit</p>
             </div>
             <div className="flex items-center space-x-4">
-              {/* Search Bar */}
-              <div className="relative">
+              {/* Subreddit Input */}
+              <div className="flex items-center space-x-2">
                 <Input
                   type="text"
-                  placeholder="Search creators..."
-                  className="w-64 pl-10"
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  placeholder="Enter subreddit (e.g., datascience)"
+                  className="w-64"
+                  value={subredditInput}
+                  onChange={(e) => setSubredditInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleScrapeSubreddit()}
                 />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <Button 
+                  onClick={handleScrapeSubreddit}
+                  disabled={!subredditInput.trim() || scrapeMutation.isPending}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {scrapeMutation.isPending ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4 mr-2" />
+                  )}
+                  Scrape Subreddit
+                </Button>
               </div>
-              
-              <Button 
-                onClick={async () => {
-                  try {
-                    const response = await fetch('/api/scrape-datascience-now', { method: 'POST' });
-                    const result = await response.json();
-                    if (result.success) {
-                      window.location.reload();
-                    }
-                  } catch (error) {
-                    console.error('Analysis failed:', error);
-                  }
-                }}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Analyze r/datascience
-              </Button>
               
               <Button 
                 onClick={() => exportMutation.mutate('csv')}

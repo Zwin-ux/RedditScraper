@@ -120,6 +120,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Universal subreddit scraping endpoint
+  app.post("/api/scrape-subreddit", async (req, res) => {
+    const { subreddit } = req.body;
+    
+    if (!subreddit) {
+      return res.status(400).json({ success: false, error: "Subreddit name is required" });
+    }
+
+    try {
+      console.log(`Analyzing r/${subreddit} with enhanced search + Google Gemini...`);
+      
+      // Use enhanced SerpAPI to extract real Reddit usernames from any subreddit
+      const redditPosts = await extractRealRedditUsernames(subreddit, 50);
+      console.log(`Enhanced search extracted ${redditPosts.length} authentic posts from r/${subreddit}`);
+      
+      if (redditPosts.length === 0) {
+        return res.json({
+          success: true,
+          data: {
+            subreddit,
+            postsAnalyzed: 0,
+            creatorsStored: 0,
+            message: `No posts found for r/${subreddit}. Try a different subreddit.`
+          }
+        });
+      }
+      
+      // AI-powered content analysis using Gemini
+      const trends = await analyzeDataScienceTrends(
+        redditPosts.map(p => ({ title: p.title, content: p.selftext }))
+      );
+      
+      // Process creators with enhanced categorization using real Reddit data
+      const creators = new Map<string, { posts: number; karma: number; categories: string[] }>();
+      const categories: Record<string, number> = {};
+      
+      for (const post of redditPosts.slice(0, 25)) {
+        try {
+          // Use Gemini for accurate post categorization
+          const analysis = await analyzePostRelevance(post.title, post.selftext);
+          categories[analysis.category] = (categories[analysis.category] || 0) + 1;
+          
+          // All posts have real authors from authentic Reddit scraping
+          const data = creators.get(post.author) || { posts: 0, karma: 0, categories: [] };
+          data.posts++;
+          data.karma += post.ups || 0;
+          if (!data.categories.includes(analysis.category)) {
+            data.categories.push(analysis.category);
+          }
+          creators.set(post.author, data);
+        } catch (error) {
+          console.error(`Analysis failed for post: ${post.title}`, error);
+          // Fallback categorization based on content
+          const content = (post.title + ' ' + (post.selftext || '')).toLowerCase();
+          if (content.includes('career')) categories.career = (categories.career || 0) + 1;
+          else if (content.includes('python')) categories.programming = (categories.programming || 0) + 1;
+          else if (content.includes('machine learning') || content.includes('ml')) categories.ml = (categories.ml || 0) + 1;
+          else categories.discussion = (categories.discussion || 0) + 1;
+          
+          // Still add the creator data even without AI analysis
+          const data = creators.get(post.author) || { posts: 0, karma: 0, categories: ['General'] };
+          data.posts++;
+          data.karma += post.ups || 0;
+          creators.set(post.author, data);
+        }
+      }
+      
+      // Store enhanced creator profiles
+      let stored = 0;
+      const topCreators = Array.from(creators.entries())
+        .sort((a, b) => b[1].karma - a[1].karma)
+        .slice(0, 15);
+        
+      for (const [username, data] of topCreators) {
+        const existing = await storage.getCreatorByUsername(username);
+        if (!existing) {
+          const tags = data.categories.length > 0 ? data.categories : ["General"];
+          await storage.createCreator({
+            username,
+            platform: "Reddit",
+            subreddit,
+            karma: data.karma,
+            engagementScore: Math.min(100, Math.max(20, Math.floor(data.karma / 5))),
+            tags,
+            profileLink: `https://reddit.com/u/${username}`,
+            lastActive: new Date(),
+            postsCount: data.posts,
+          });
+          stored++;
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          subreddit,
+          postsAnalyzed: redditPosts.length,
+          creatorsFound: creators.size,
+          creatorsStored: stored,
+          categories,
+          trends,
+          topCreators: topCreators.slice(0, 8).map(([username, data]) => ({
+            username,
+            posts: data.posts,
+            karma: data.karma,
+            specialties: data.categories
+          }))
+        },
+        message: `Analyzed ${redditPosts.length} posts from r/${subreddit}, found ${creators.size} creators, stored ${stored} new profiles`
+      });
+
+    } catch (error) {
+      console.error(`Analysis failed for r/${subreddit}:`, error);
+      res.status(500).json({ 
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Enhanced r/datascience analysis with Google Gemini
   app.post("/api/scrape-datascience-now", async (req, res) => {
     try {

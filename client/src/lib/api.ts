@@ -42,6 +42,12 @@ export const api = {
     return response.json();
   },
 
+  // Scraping
+  scrapeSubreddit: async (subreddit: string) => {
+    const response = await apiRequest("POST", "/api/scrape-subreddit", { subreddit });
+    return response.json();
+  },
+
   // Crawling
   startCrawl: async (data: { subreddit?: string; all?: boolean }) => {
     const response = await apiRequest("POST", "/api/crawl", data);
