@@ -239,7 +239,7 @@ export async function comprehensiveSubredditAnalysis(subreddit: string): Promise
 
   return {
     posts: uniquePosts,
-    topCreators: Array.from(creators).slice(0, 50),
+    topCreators: [...creators].slice(0, 50),
     insights
   };
 }

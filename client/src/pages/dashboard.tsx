@@ -242,12 +242,21 @@ export default function Dashboard() {
               </div>
               
               <Button 
-                onClick={() => crawlMutation.mutate({ all: true })}
-                disabled={crawlMutation.isPending}
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/analyze-datascience', { method: 'POST' });
+                    const result = await response.json();
+                    if (result.success) {
+                      window.location.reload();
+                    }
+                  } catch (error) {
+                    console.error('Analysis failed:', error);
+                  }
+                }}
                 className="bg-blue-600 hover:bg-blue-700"
               >
-                <RefreshCw className={`w-4 h-4 mr-2 ${crawlMutation.isPending ? 'animate-spin' : ''}`} />
-                Refresh Data
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Analyze r/datascience
               </Button>
               
               <Button 
