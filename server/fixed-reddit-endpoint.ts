@@ -167,6 +167,13 @@ export function addFixedRedditEndpoint(app: Express) {
             console.log(`Stored verified Reddit creator: ${creator.username}`);
           } else {
             creatorId = existing.id;
+            // Update existing creator with latest activity
+            await storage.updateCreator(existing.id, {
+              karma: Math.max(existing.karma, creator.totalScore),
+              lastActive: new Date(),
+              postsCount: existing.postsCount + creator.posts,
+            });
+            console.log(`Updated existing creator: ${creator.username}`);
           }
           
           // Store actual posts for this creator

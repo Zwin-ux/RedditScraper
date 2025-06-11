@@ -36,6 +36,11 @@ export const api = {
     return response.json();
   },
 
+  getCreatorPosts: async (creatorId: number, limit = 10) => {
+    const response = await apiRequest("GET", `/api/creators/${creatorId}/posts?limit=${limit}`);
+    return response.json();
+  },
+
   // Subreddits
   getSubreddits: async (): Promise<Subreddit[]> => {
     const response = await apiRequest("GET", "/api/subreddits");
