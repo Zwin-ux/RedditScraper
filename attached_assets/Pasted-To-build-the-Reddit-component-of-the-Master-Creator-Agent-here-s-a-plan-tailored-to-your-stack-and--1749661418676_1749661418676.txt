@@ -1,0 +1,110 @@
+To build the Reddit component of the Master Creator Agent, here’s a plan tailored to your stack and goals:
+
+---
+
+### 🔧 Reddit Agent: Design Overview
+
+#### **Objective**
+
+Ingest top AI-related creators or contributors from Reddit—especially those consistently posting in subreddits like r/ArtificialInteligence, r/LLMs, r/ChatGPT, etc.—to identify high-signal users contributing to AI discourse, projects, or tools.
+
+---
+
+### 🧠 Core Features
+
+#### 1. **Subreddit Crawler (Reddit Search API / PRAW)**
+
+* Pull threads and comments from target subreddits.
+* Prioritize posts with keywords like “project,” “repo,” “tutorial,” “dataset,” “prompt engineering,” “agentic,” “LLM,” “OpenAI,” “LangChain,” “AutoGPT.”
+
+#### 2. **Creator Extraction**
+
+* For each high-engagement post, extract the author.
+* Cross-reference usernames across Reddit and other platforms (optional matching with Twitter/GitHub if they share links or same alias).
+
+#### 3. **Engagement Scorer**
+
+* Score based on:
+
+  * Upvotes (avg & 30-day trend)
+  * Comment karma
+  * Submission frequency
+  * Awards received
+  * Top comment scores
+
+#### 4. **Niche Tagger (LLM)**
+
+* Summarize post/comment content.
+* Classify user into tags like: “prompt engineer,” “AI tools builder,” “opinion leader,” “research explainer.”
+
+#### 5. **Output Formatter**
+
+* Add to Supabase/Postgres or export to Sheets:
+
+```ts
+{
+  username: "LLM_DevGuy",
+  platform: "Reddit",
+  subreddit: "r/LocalLLMs",
+  karma: 2843,
+  engagement_score: 71,
+  tags: ["LLM tools", "open source", "builder"],
+  profile_link: "https://reddit.com/u/LLM_DevGuy"
+}
+```
+
+---
+
+### 🛠 Tech Stack & Tools
+
+| Component       | Stack/Tool                                     |
+| --------------- | ---------------------------------------------- |
+| Reddit API      | PRAW (Python Reddit API Wrapper) or Pushshift  |
+| Ingestion Agent | Python + httpx + n8n trigger (daily or weekly) |
+| Data Cleaning   | pandas + regex for summarizing + GPT tagging   |
+| Classification  | Flowise/GPT-4                                  |
+| Storage         | Supabase/PostgreSQL                            |
+| Dashboard       | Next.js 15 + Tailwind + Shadcn                 |
+| Auth            | Clerk.dev or Supabase                          |
+| Export          | Airtable / Google Sheets                       |
+
+---
+
+### 🔄 Scheduling
+
+* **Daily Crawler Job**: Pulls top 100 posts from 5–10 subreddits and filters top 10 creators.
+* **Weekly Update**: Updates scores, tags, and adds new users.
+
+---
+
+### 🧪 Sample Subreddits
+
+* r/MachineLearning
+* r/ArtificialInteligence
+* r/LocalLLMs
+* r/PromptEngineering
+* r/AutoGPT
+* r/ChatGPT
+* r/LLMOps
+
+---
+
+### 🚧 Tradeoffs / Notes
+
+| Issue                                      | Solution                                                      |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| Pushshift API often rate-limited or down   | Backup with PRAW + `prawcore.exceptions` handler              |
+| Username linkage across platforms is fuzzy | Only attempt when explicit links exist                        |
+| Reddit profiles are semi-anonymous         | Still valuable for community insights or recurring commenters |
+
+---
+
+### ✅ Next Steps
+
+1. Set up PRAW and test basic crawler.
+2. Create scoring rubric (karma, post/comment ratio, etc.).
+3. Define LLM prompts for niche classification.
+4. Plug output into Supabase.
+5. Build minimal frontend for internal review.
+
+Want me to mock up the PRAW script or write the Flowise LLM tagger prompt next?
