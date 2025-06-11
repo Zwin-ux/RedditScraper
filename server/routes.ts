@@ -384,60 +384,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      console.log(`Getting top creators from r/${subreddit} using Reddit API...`);
+      console.log(`Scraping r/${subreddit} for active creators...`);
       
-      // Try Reddit API first, fallback to existing data with Gemini analysis
       let qualityCreators: any[] = [];
       
       try {
-        const analysis = await redditApiClient.searchWithAIAnalysis(subreddit, undefined, 100);
-        qualityCreators = analysis.topCreators.map(creator => ({
-          username: creator.username,
-          post_link: `https://reddit.com/u/${creator.username}`,
-          upvotes: creator.totalUpvotes,
-          subreddit: subreddit,
-          timestamp: Date.now() / 1000,
-          title: `${creator.postCount} posts, ${creator.avgUpvotes} avg upvotes`
-        }));
-        console.log(`Reddit API success: Found ${qualityCreators.length} creators`);
-      } catch (error) {
-        console.log(`Reddit API authentication failed, using existing database with Gemini analysis`);
+        // Use the comprehensive Reddit Scraper V2 to get actual posts
+        const scraper = new RedditScraperV2({
+          subreddit,
+          limit: 100,
+          sort: 'hot',
+          minScore: 5,
+          enableLogging: false,
+          usePushshift: true
+        });
         
-        // Fallback: Get existing creators from database and enhance with Gemini
+        const result = await scraper.scrapeSubreddit({
+          subreddit,
+          limit: 100,
+          sort: 'hot',
+          minScore: 5,
+          enableLogging: false,
+          usePushshift: true
+        });
+        
+        console.log(`Scraped ${result.posts.length} posts from r/${subreddit}`);
+        
+        // Extract creators from scraped posts and calculate engagement
+        const creatorStats = new Map();
+        
+        for (const post of result.posts) {
+          const username = post.author;
+          if (username === '[deleted]' || username === 'AutoModerator') continue;
+          
+          if (!creatorStats.has(username)) {
+            creatorStats.set(username, {
+              username,
+              posts: [],
+              totalScore: 0,
+              totalComments: 0,
+              postCount: 0
+            });
+          }
+          
+          const creator = creatorStats.get(username);
+          creator.posts.push(post);
+          creator.totalScore += post.score || 0;
+          creator.totalComments += post.num_comments || 0;
+          creator.postCount += 1;
+        }
+        
+        // Convert to array and sort by engagement
+        const creators = Array.from(creatorStats.values())
+          .filter(creator => creator.postCount >= 1 && creator.totalScore >= 5)
+          .sort((a, b) => {
+            const scoreA = a.totalScore + (a.totalComments * 0.1);
+            const scoreB = b.totalScore + (b.totalComments * 0.1);
+            return scoreB - scoreA;
+          })
+          .slice(0, 20);
+        
+        // Enhance with AI analysis for top creators
+        for (const creator of creators) {
+          try {
+            const posts = creator.posts.slice(0, 3).map((p: any) => ({ title: p.title, content: p.selftext || '' }));
+            const analysis = await analyzeCreatorContent(creator.username, posts);
+            
+            qualityCreators.push({
+              username: creator.username,
+              post_link: `https://reddit.com/u/${creator.username}`,
+              upvotes: creator.totalScore,
+              subreddit: subreddit,
+              timestamp: Date.now() / 1000,
+              title: `${creator.postCount} posts, ${Math.round(creator.totalScore/creator.postCount)} avg score - ${analysis.tags.slice(0, 3).join(', ')}`
+            });
+          } catch (analysisError) {
+            // Include creator without AI analysis
+            qualityCreators.push({
+              username: creator.username,
+              post_link: `https://reddit.com/u/${creator.username}`,
+              upvotes: creator.totalScore,
+              subreddit: subreddit,
+              timestamp: Date.now() / 1000,
+              title: `${creator.postCount} posts, ${Math.round(creator.totalScore/creator.postCount)} avg score`
+            });
+          }
+        }
+        
+        console.log(`Found ${qualityCreators.length} active creators in r/${subreddit}`);
+        
+      } catch (scrapeError) {
+        console.log(`Reddit scraping failed: ${scrapeError}`);
+        
+        // Fallback to existing database creators
         const existingCreators = await storage.getCreators({ 
           subreddit: subreddit, 
-          limit: 20 
+          limit: 10 
         });
         
         for (const creator of existingCreators) {
-          const posts = await storage.getPostsByCreator(creator.id, 5);
-          if (posts.length > 0) {
-            try {
-              const analysis = await analyzeCreatorContent(
-                creator.username, 
-                posts.map(p => ({ title: p.title, content: p.content || '' }))
-              );
-              
-              qualityCreators.push({
-                username: creator.username,
-                post_link: `https://reddit.com/u/${creator.username}`,
-                upvotes: creator.totalKarma || 0,
-                subreddit: subreddit,
-                timestamp: Date.now() / 1000,
-                title: `Enhanced with Gemini AI - ${analysis.tags.join(', ')}`
-              });
-            } catch (analysisError) {
-              // Include creator even without AI analysis
-              qualityCreators.push({
-                username: creator.username,
-                post_link: `https://reddit.com/u/${creator.username}`,
-                upvotes: creator.karma || 0,
-                subreddit: subreddit,
-                timestamp: Date.now() / 1000,
-                title: `Database creator - ${creator.engagementScore} engagement`
-              });
-            }
-          }
+          qualityCreators.push({
+            username: creator.username,
+            post_link: `https://reddit.com/u/${creator.username}`,
+            upvotes: creator.karma,
+            subreddit: subreddit,
+            timestamp: Date.now() / 1000,
+            title: `Database creator - ${creator.engagementScore} engagement`
+          });
         }
       }
       
@@ -463,19 +516,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let category = 'General';
         if (content.includes('career') || content.includes('job')) {
           category = 'Career';
-          categories.career = (categories.career || 0) + 1;
+          categories['career'] = (categories['career'] || 0) + 1;
         } else if (content.includes('python') || content.includes('coding') || content.includes('programming')) {
           category = 'Programming';
-          categories.programming = (categories.programming || 0) + 1;
+          categories['programming'] = (categories['programming'] || 0) + 1;
         } else if (content.includes('machine learning') || content.includes('ml') || content.includes('ai')) {
           category = 'Machine Learning';
-          categories.ml = (categories.ml || 0) + 1;
+          categories['ml'] = (categories['ml'] || 0) + 1;
         } else if (content.includes('data') || content.includes('analysis') || content.includes('analytics')) {
           category = 'Data Analysis';
-          categories.analysis = (categories.analysis || 0) + 1;
+          categories['analysis'] = (categories['analysis'] || 0) + 1;
         } else {
           category = 'Discussion';
-          categories.discussion = (categories.discussion || 0) + 1;
+          categories['discussion'] = (categories['discussion'] || 0) + 1;
         }
         
         // Store creator data with real metrics
