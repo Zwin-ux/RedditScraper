@@ -44,7 +44,7 @@ export const api = {
 
   // Scraping
   scrapeSubreddit: async (subreddit: string) => {
-    const response = await apiRequest("POST", "/api/scrape-subreddit", { subreddit });
+    const response = await apiRequest("POST", "/api/scrape-subreddit-fixed", { subreddit });
     return response.json();
   },
 
