@@ -13,18 +13,23 @@ export interface RedditPostData {
 
 export async function fetchRedditPosts(subreddit: string, limit = 100): Promise<RedditPostData[]> {
   try {
-    // Use Reddit's JSON API endpoint
+    // Use Reddit's JSON API endpoint with better headers
     const url = `https://www.reddit.com/r/${subreddit}.json?limit=${Math.min(limit, 100)}`;
     
     console.log(`Fetching real Reddit data from: ${url}`);
     
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'DataScienceAnalyzer/1.0'
+        'User-Agent': 'Mozilla/5.0 (DataScienceAnalyzer/1.0)',
+        'Accept': 'application/json'
       }
     });
 
+    console.log(`Reddit API response status: ${response.status}`);
+    
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Reddit API error: ${response.status} - ${errorText}`);
       throw new Error(`Reddit API request failed: ${response.status}`);
     }
 

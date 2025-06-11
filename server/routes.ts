@@ -121,38 +121,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enhanced r/datascience analysis with Google Gemini
   app.post("/api/scrape-datascience-now", async (req, res) => {
     try {
-      console.log("Analyzing r/datascience with SerpAPI + Google Gemini...");
+      console.log("Analyzing r/datascience with direct Reddit API + Google Gemini...");
       
-      const posts = await searchRedditPosts('datascience', undefined, 50);
+      let redditPosts = [];
+      try {
+        redditPosts = await fetchRedditPosts('datascience', 100);
+        console.log(`Reddit API returned ${redditPosts.length} posts`);
+      } catch (error) {
+        console.error("Reddit API failed, falling back to SerpAPI:", error);
+        // Fallback to SerpAPI with improved username extraction
+        const serpPosts = await searchRedditPosts('datascience', undefined, 50);
+        redditPosts = serpPosts.filter(p => p.author).map(p => ({
+          title: p.title,
+          author: p.author!,
+          subreddit: p.subreddit,
+          ups: p.upvotes || 0,
+          num_comments: p.comments || 0,
+          url: p.link,
+          selftext: p.snippet || '',
+          created_utc: Date.now() / 1000,
+          permalink: p.link
+        }));
+        console.log(`SerpAPI fallback returned ${redditPosts.length} posts with real usernames`);
+      }
       
       // AI-powered content analysis using Gemini
       const trends = await analyzeDataScienceTrends(
-        posts.map(p => ({ title: p.title, content: p.snippet }))
+        redditPosts.map(p => ({ title: p.title, content: p.selftext }))
       );
       
-      // Process creators with enhanced categorization
+      // Process creators with enhanced categorization using real Reddit data
       const creators = new Map<string, { posts: number; karma: number; categories: string[] }>();
       const categories: Record<string, number> = {};
       
-      for (const post of posts.slice(0, 30)) {
+      for (const post of redditPosts.slice(0, 50)) {
         try {
           // Use Gemini for accurate post categorization
-          const analysis = await analyzePostRelevance(post.title, post.snippet);
+          const analysis = await analyzePostRelevance(post.title, post.selftext);
           categories[analysis.category] = (categories[analysis.category] || 0) + 1;
           
-          if (post.author) {
-            const data = creators.get(post.author) || { posts: 0, karma: 0, categories: [] };
-            data.posts++;
-            data.karma += post.upvotes || 0;
-            if (!data.categories.includes(analysis.category)) {
-              data.categories.push(analysis.category);
-            }
-            creators.set(post.author, data);
+          // All posts from Reddit API have real authors
+          const data = creators.get(post.author) || { posts: 0, karma: 0, categories: [] };
+          data.posts++;
+          data.karma += post.ups || 0;
+          if (!data.categories.includes(analysis.category)) {
+            data.categories.push(analysis.category);
           }
+          creators.set(post.author, data);
         } catch (error) {
           console.error(`Analysis failed for post: ${post.title}`, error);
-          // Fallback categorization
-          const content = (post.title + ' ' + (post.snippet || '')).toLowerCase();
+          // Fallback categorization based on content
+          const content = (post.title + ' ' + (post.selftext || '')).toLowerCase();
           if (content.includes('career')) categories.career = (categories.career || 0) + 1;
           else if (content.includes('python')) categories.programming = (categories.programming || 0) + 1;
           else categories.discussion = (categories.discussion || 0) + 1;
@@ -188,7 +207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         success: true,
         data: {
-          postsAnalyzed: posts.length,
+          postsAnalyzed: redditPosts.length,
           creatorsFound: creators.size,
           creatorsStored: stored,
           categories,
@@ -200,7 +219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             specialties: data.categories
           }))
         },
-        message: `Analyzed ${posts.length} posts with Gemini AI, found ${creators.size} creators, stored ${stored} new profiles`
+        message: `Analyzed ${redditPosts.length} posts with Gemini AI, found ${creators.size} creators, stored ${stored} new profiles`
       });
 
     } catch (error) {
