@@ -12,6 +12,8 @@ import { scrapeTopCreators } from "./efficient-scraper";
 import { scrapeWithAlternativeMethod, scrapeRedditDirectly } from "./alternative-scraper";
 import { robustSubredditScraper, scrapeOldReddit } from "./robust-scraper";
 import { scrapeSpecializedSubreddits, broadRedditSearch } from "./specialized-scraper";
+import { finalComprehensiveScraper } from "./final-scraper";
+import { rateLimitedScraper } from "./rate-limited-scraper";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -144,33 +146,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Reddit API blocked for r/${subreddit}, using optimized search...`);
         
         try {
-          // Try multiple approaches with timeout
-          const searchPromise = Promise.race([
-            extractRealRedditUsernames(subreddit, 10),
-            scrapeSpecializedSubreddits(subreddit),
-            robustSubredditScraper(subreddit),
-            scrapeOldReddit(subreddit),
-            broadRedditSearch(subreddit),
-            new Promise<any[]>((_, reject) => 
-              setTimeout(() => reject(new Error('Search timeout')), 7000)
-            )
-          ]);
-          
-          const searchResults = await searchPromise;
+          // Use rate-limited scraper to avoid API limits
+          const searchResults = await rateLimitedScraper(subreddit);
           
           // Convert results to standard format
           if (searchResults && searchResults.length > 0) {
             qualityCreators = searchResults.map(post => ({
-              username: post.author || post.username,
-              post_link: post.permalink ? `https://reddit.com${post.permalink}` : post.post_link || '',
-              upvotes: post.ups || post.upvotes || 0,
-              subreddit: post.subreddit || subreddit,
-              timestamp: post.created_utc || post.timestamp || Date.now() / 1000,
-              title: post.title || 'Post'
+              username: post.username,
+              post_link: post.post_link,
+              upvotes: post.upvotes,
+              subreddit: post.subreddit,
+              timestamp: post.timestamp,
+              title: post.title
             }));
           }
         } catch (searchError) {
-          console.log(`All search methods failed or timed out for r/${subreddit}`);
+          console.log(`Search failed for r/${subreddit}`);
         }
       }
       
