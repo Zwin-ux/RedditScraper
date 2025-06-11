@@ -45,8 +45,8 @@ export default function Dashboard() {
       };
       // Remove undefined values
       Object.keys(apiFilters).forEach(key => {
-        if (apiFilters[key] === undefined) {
-          delete apiFilters[key];
+        if (apiFilters[key as keyof typeof apiFilters] === undefined) {
+          delete apiFilters[key as keyof typeof apiFilters];
         }
       });
       return api.getCreators(apiFilters);

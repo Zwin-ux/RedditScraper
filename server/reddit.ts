@@ -83,7 +83,7 @@ export async function crawlSubreddit(subredditName: string, limit = 100): Promis
     return { posts, creators };
   } catch (error) {
     console.error(`Failed to crawl r/${subredditName}:`, error);
-    throw new Error(`Reddit crawling failed: ${error.message}`);
+    throw new Error(`Reddit crawling failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -173,11 +173,11 @@ export async function crawlAndProcessSubreddit(subredditName: string): Promise<{
       }
       
       // Process each creator
-      for (const creatorUsername of creators) {
+      for (const creatorUsername of Array.from(creators)) {
         try {
           await processCreator(creatorUsername, subredditName);
         } catch (error) {
-          errors.push(`Failed to process creator ${creatorUsername}: ${error.message}`);
+          errors.push(`Failed to process creator ${creatorUsername}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
       
@@ -201,13 +201,13 @@ export async function crawlAndProcessSubreddit(subredditName: string): Promise<{
       // Update crawl log with failure
       await storage.updateCrawlLog(crawlLog.id, {
         status: 'failed',
-        errorMessage: error.message
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
       });
       throw error;
     }
     
   } catch (error) {
-    errors.push(`Crawl failed: ${error.message}`);
+    errors.push(`Crawl failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     return {
       postsFound: 0,
       creatorsProcessed: 0,
