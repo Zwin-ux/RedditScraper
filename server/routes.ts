@@ -10,6 +10,8 @@ import { analyzeDataScienceTrends, analyzePostRelevance } from "./gemini";
 import { quickScrapeSubreddit } from "./quick-scraper";
 import { scrapeTopCreators } from "./efficient-scraper";
 import { scrapeWithAlternativeMethod, scrapeRedditDirectly } from "./alternative-scraper";
+import { robustSubredditScraper, scrapeOldReddit } from "./robust-scraper";
+import { scrapeSpecializedSubreddits, broadRedditSearch } from "./specialized-scraper";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -142,11 +144,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Reddit API blocked for r/${subreddit}, using optimized search...`);
         
         try {
-          // Fast search with 5-second timeout
+          // Try multiple approaches with timeout
           const searchPromise = Promise.race([
             extractRealRedditUsernames(subreddit, 10),
+            scrapeSpecializedSubreddits(subreddit),
+            robustSubredditScraper(subreddit),
+            scrapeOldReddit(subreddit),
+            broadRedditSearch(subreddit),
             new Promise<any[]>((_, reject) => 
-              setTimeout(() => reject(new Error('Search timeout')), 5000)
+              setTimeout(() => reject(new Error('Search timeout')), 7000)
             )
           ]);
           
