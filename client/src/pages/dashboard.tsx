@@ -244,7 +244,7 @@ export default function Dashboard() {
               <Button 
                 onClick={async () => {
                   try {
-                    const response = await fetch('/api/analyze-datascience', { method: 'POST' });
+                    const response = await fetch('/api/scrape-datascience-now', { method: 'POST' });
                     const result = await response.json();
                     if (result.success) {
                       window.location.reload();

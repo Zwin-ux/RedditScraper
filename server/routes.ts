@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { crawlAndProcessSubreddit, initializeSubreddits } from "./reddit";
 import { comprehensiveSubredditAnalysis, searchRedditPosts } from "./serpapi";
-import { analyzeDataScienceTrends } from "./openai";
+import { analyzeDataScienceTrends, analyzePostRelevance } from "./gemini";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -117,39 +117,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Simple SerpAPI-only endpoint for immediate r/datascience data
+  // Enhanced r/datascience analysis with Google Gemini
   app.post("/api/scrape-datascience-now", async (req, res) => {
     try {
-      console.log("Scraping r/datascience with SerpAPI only...");
+      console.log("Analyzing r/datascience with SerpAPI + Google Gemini...");
       
       const posts = await searchRedditPosts('datascience', undefined, 50);
       
-      // Process real creator data
-      const creators = new Map<string, { posts: number; karma: number }>();
+      // AI-powered content analysis using Gemini
+      const trends = await analyzeDataScienceTrends(
+        posts.map(p => ({ title: p.title, content: p.snippet }))
+      );
+      
+      // Process creators with enhanced categorization
+      const creators = new Map<string, { posts: number; karma: number; categories: string[] }>();
       const categories: Record<string, number> = {};
       
-      for (const post of posts) {
-        if (post.author) {
-          const data = creators.get(post.author) || { posts: 0, karma: 0 };
-          data.posts++;
-          data.karma += post.upvotes || 0;
-          creators.set(post.author, data);
-        }
-        
-        // Categorize content
-        const content = (post.title + ' ' + (post.snippet || '')).toLowerCase();
-        if (content.includes('career') || content.includes('job')) {
-          categories.career = (categories.career || 0) + 1;
-        } else if (content.includes('python') || content.includes('sql')) {
-          categories.programming = (categories.programming || 0) + 1;
-        } else if (content.includes('machine learning') || content.includes('ml')) {
-          categories.ml = (categories.ml || 0) + 1;
-        } else {
-          categories.discussion = (categories.discussion || 0) + 1;
+      for (const post of posts.slice(0, 30)) {
+        try {
+          // Use Gemini for accurate post categorization
+          const analysis = await analyzePostRelevance(post.title, post.snippet);
+          categories[analysis.category] = (categories[analysis.category] || 0) + 1;
+          
+          if (post.author) {
+            const data = creators.get(post.author) || { posts: 0, karma: 0, categories: [] };
+            data.posts++;
+            data.karma += post.upvotes || 0;
+            if (!data.categories.includes(analysis.category)) {
+              data.categories.push(analysis.category);
+            }
+            creators.set(post.author, data);
+          }
+        } catch (error) {
+          console.error(`Analysis failed for post: ${post.title}`, error);
+          // Fallback categorization
+          const content = (post.title + ' ' + (post.snippet || '')).toLowerCase();
+          if (content.includes('career')) categories.career = (categories.career || 0) + 1;
+          else if (content.includes('python')) categories.programming = (categories.programming || 0) + 1;
+          else categories.discussion = (categories.discussion || 0) + 1;
         }
       }
       
-      // Store top creators
+      // Store enhanced creator profiles
       let stored = 0;
       const topCreators = Array.from(creators.entries())
         .sort((a, b) => b[1].karma - a[1].karma)
@@ -158,13 +167,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const [username, data] of topCreators) {
         const existing = await storage.getCreatorByUsername(username);
         if (!existing) {
+          const tags = data.categories.length > 0 ? data.categories : ["Data Science"];
           await storage.createCreator({
             username,
             platform: "Reddit",
             subreddit: "datascience",
             karma: data.karma,
-            engagementScore: Math.min(100, Math.max(10, Math.floor(data.karma / 10))),
-            tags: ["Data Science"],
+            engagementScore: Math.min(100, Math.max(20, Math.floor(data.karma / 5))),
+            tags,
             profileLink: `https://reddit.com/u/${username}`,
             lastActive: new Date(),
             postsCount: data.posts,
@@ -181,17 +191,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           creatorsFound: creators.size,
           creatorsStored: stored,
           categories,
+          trends,
           topCreators: topCreators.slice(0, 8).map(([username, data]) => ({
             username,
             posts: data.posts,
-            karma: data.karma
+            karma: data.karma,
+            specialties: data.categories
           }))
         },
-        message: `Found ${posts.length} real posts, ${creators.size} creators, stored ${stored} new ones`
+        message: `Analyzed ${posts.length} posts with Gemini AI, found ${creators.size} creators, stored ${stored} new profiles`
       });
 
     } catch (error) {
-      console.error("Scraping failed:", error);
+      console.error("Analysis failed:", error);
       res.status(500).json({ 
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
