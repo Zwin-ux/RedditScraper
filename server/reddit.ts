@@ -20,19 +20,8 @@ export interface RedditCreatorData {
   comments: Array<{ content: string; upvotes: number }>;
 }
 
-// Target subreddits for AI content discovery
-const TARGET_SUBREDDITS = [
-  'MachineLearning',
-  'ArtificialIntelligence', 
-  'LocalLLMs',
-  'PromptEngineering',
-  'AutoGPT',
-  'ChatGPT',
-  'LLMOps',
-  'OpenAI',
-  'deeplearning',
-  'datascience'
-];
+// Primary target subreddit for comprehensive analysis
+const TARGET_SUBREDDIT = 'datascience';
 
 export async function crawlSubreddit(subredditName: string, limit = 100): Promise<{
   posts: RedditPost[];
@@ -217,19 +206,17 @@ export async function crawlAndProcessSubreddit(subredditName: string): Promise<{
 }
 
 export async function initializeSubreddits(): Promise<void> {
-  for (const subredditName of TARGET_SUBREDDITS) {
-    try {
-      const existing = await storage.getSubreddits();
-      const existingNames = existing.map(s => s.name);
-      
-      if (!existingNames.includes(subredditName)) {
-        await storage.createSubreddit({
-          name: subredditName,
-          isActive: 1
-        });
-      }
-    } catch (error) {
-      console.error(`Failed to initialize subreddit ${subredditName}:`, error);
+  try {
+    const existing = await storage.getSubreddits();
+    const existingNames = existing.map(s => s.name);
+    
+    if (!existingNames.includes(TARGET_SUBREDDIT)) {
+      await storage.createSubreddit({
+        name: TARGET_SUBREDDIT,
+        isActive: 1
+      });
     }
+  } catch (error) {
+    console.error(`Failed to initialize subreddit ${TARGET_SUBREDDIT}:`, error);
   }
 }

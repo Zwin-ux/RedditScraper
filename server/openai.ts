@@ -77,6 +77,8 @@ ${contentSample}`
 
 export async function analyzePostRelevance(title: string, content?: string): Promise<{
   isRelevant: boolean;
+  topics?: string[];
+  category?: string;
   keywords: string[];
   confidence: number;
 }> {
@@ -84,45 +86,109 @@ export async function analyzePostRelevance(title: string, content?: string): Pro
     const text = `Title: ${title}\nContent: ${content || ''}`;
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
       messages: [
         {
           role: "system",
-          content: `You are an AI content filter for identifying AI/ML related posts on Reddit.
+          content: `You are an expert data science content analyzer for r/datascience posts.
           
-          Determine if the post is relevant to AI/ML topics and extract key technical keywords.
+          Analyze posts and categorize them by topic, content type, and extract key insights.
           
-          Consider relevant: machine learning, deep learning, neural networks, LLMs, GPT, ChatGPT, AI tools, automation, prompt engineering, fine-tuning, datasets, models, algorithms, etc.
+          Focus on: data science, machine learning, statistics, analytics, Python, R, SQL, career advice, tools (pandas, scikit-learn, etc.), visualization, big data, cloud platforms, business intelligence, research methods.
           
           Respond with JSON:
           {
             "isRelevant": true/false,
+            "topics": ["specific topics"],
+            "category": "career|technical|tools|discussion|project|education|industry|question|resource",
             "keywords": ["keyword1", "keyword2"],
             "confidence": 0.85
           }`
         },
         {
           role: "user",
-          content: `Analyze this Reddit post: ${text}`
+          content: `Analyze this r/datascience post: ${text}`
         }
       ],
       response_format: { type: "json_object" },
-      max_tokens: 200
+      max_tokens: 300
     });
 
     const result = JSON.parse(response.choices[0].message.content || '{}');
     
     return {
-      isRelevant: result.isRelevant || false,
+      isRelevant: result.isRelevant !== false,
+      topics: Array.isArray(result.topics) ? result.topics : [],
+      category: result.category || 'general',
       keywords: Array.isArray(result.keywords) ? result.keywords.slice(0, 10) : [],
-      confidence: Math.max(0, Math.min(1, result.confidence || 0.5))
+      confidence: Math.max(0, Math.min(1, result.confidence || 0.8))
     };
   } catch (error) {
     console.error("Failed to analyze post relevance:", error);
     return {
-      isRelevant: false,
+      isRelevant: true,
+      topics: [],
+      category: 'general',
       keywords: [],
-      confidence: 0.0
+      confidence: 0.5
+    };
+  }
+}
+
+export async function analyzeDataScienceTrends(posts: Array<{title: string, content?: string}>): Promise<{
+  emergingTopics: string[];
+  skillDemands: string[];
+  industryInsights: string[];
+  careerTrends: string[];
+  toolsAndTechnologies: string[];
+}> {
+  try {
+    const postsText = posts.slice(0, 30).map(p => `${p.title}\n${p.content || ''}`).join('\n\n---\n\n');
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [
+        {
+          role: "system",
+          content: `You are a data science industry analyst. Analyze r/datascience posts to identify trends, emerging topics, skill demands, and career insights.
+          
+          Focus on current industry developments, popular tools, career advice patterns, and technical discussions.`
+        },
+        {
+          role: "user",
+          content: `Analyze these r/datascience posts and identify key trends. Respond with JSON:
+          {
+            "emergingTopics": ["new concepts, methodologies, or focus areas"],
+            "skillDemands": ["technical skills and tools in high demand"],
+            "industryInsights": ["market trends, company practices, industry changes"],
+            "careerTrends": ["career advice, job market insights, salary discussions"],
+            "toolsAndTechnologies": ["popular tools, libraries, platforms being discussed"]
+          }
+          
+          Posts: ${postsText}`
+        }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 800
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || '{}');
+    
+    return {
+      emergingTopics: result.emergingTopics || [],
+      skillDemands: result.skillDemands || [],
+      industryInsights: result.industryInsights || [],
+      careerTrends: result.careerTrends || [],
+      toolsAndTechnologies: result.toolsAndTechnologies || []
+    };
+  } catch (error) {
+    console.error('Failed to analyze data science trends:', error);
+    return {
+      emergingTopics: [],
+      skillDemands: [],
+      industryInsights: [],
+      careerTrends: [],
+      toolsAndTechnologies: []
     };
   }
 }
