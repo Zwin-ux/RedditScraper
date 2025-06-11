@@ -190,39 +190,53 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          <div className="flex items-center space-x-3 px-3 py-2 bg-blue-600 text-white rounded-lg font-medium">
-            <BarChart3 className="w-4 h-4" />
-            <span>Dashboard</span>
+        {/* Quick Actions */}
+        <div className="flex-1 px-4 py-6">
+          <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Actions</h3>
+          <div className="space-y-3">
+            <Button 
+              onClick={() => exportMutation.mutate('csv')}
+              disabled={exportMutation.isPending}
+              className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {exportMutation.isPending ? 'Exporting...' : 'Export CSV'}
+            </Button>
+            
+            <Button 
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+                queryClient.invalidateQueries({ queryKey: ['/api/creators'] });
+                toast({ title: "Data refreshed successfully" });
+              }}
+              variant="outline"
+              className="w-full justify-start"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh Data
+            </Button>
           </div>
-          <button className="flex items-center space-x-3 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors w-full text-left">
-            <Users className="w-4 h-4" />
-            <span>Creators</span>
-          </button>
-          <button className="flex items-center space-x-3 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors w-full text-left">
-            <Radio className="w-4 h-4" />
-            <span>Subreddits</span>
-          </button>
-          <button 
-            onClick={() => exportMutation.mutate('csv')}
-            className="flex items-center space-x-3 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors w-full text-left"
-          >
-            <Download className="w-4 h-4" />
-            <span>Export</span>
-          </button>
-        </nav>
+        </div>
 
-        {/* Status Panel */}
+        {/* Subreddit Status */}
         <div className="p-4 border-t border-slate-200">
-          <div className="bg-slate-50 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-slate-600">Last Crawl</span>
-              <span className="text-sm text-slate-500">2 hours ago</span>
+          <h4 className="text-sm font-semibold text-slate-900 mb-3">Subreddit Status</h4>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">LocalLLMs</span>
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
             </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-slate-600">Active</span>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">MachineLearning</span>
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">datascience</span>
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">ArtificialIntelligence</span>
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
             </div>
           </div>
         </div>
@@ -238,14 +252,9 @@ export default function Dashboard() {
               <p className="text-slate-600">Monitor and manage AI creators from Reddit</p>
             </div>
             <div className="flex items-center space-x-4">
-              <Button 
-                onClick={() => exportMutation.mutate('csv')}
-                variant="outline"
-                className="bg-green-600 text-white hover:bg-green-700"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
+              <div className="text-sm text-slate-500">
+                {creators.length} creators found
+              </div>
             </div>
           </div>
         </header>
