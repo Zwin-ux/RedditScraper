@@ -200,28 +200,38 @@ export async function comprehensiveSubredditAnalysis(subreddit: string): Promise
   let totalEngagement = 0;
   let engagementCount = 0;
 
-  for (const post of uniquePosts.slice(0, 20)) { // Analyze top 20 posts
-    try {
-      const analysis = await analyzePostRelevance(post.title, post.snippet);
-      
-      if (analysis.topics && analysis.topics.length > 0) {
-        topTopics.push(...analysis.topics);
-      }
-
-      if (analysis.category) {
-        contentCategories[analysis.category] = (contentCategories[analysis.category] || 0) + 1;
-      }
-
-      if (post.upvotes) {
-        totalEngagement += post.upvotes;
-        engagementCount++;
-      }
-
-      // Add delay for API rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
-    } catch (error) {
-      console.error('Failed to analyze post:', error);
+  // Process posts for real engagement data and basic categorization
+  for (const post of uniquePosts.slice(0, 50)) {
+    if (post.upvotes) {
+      totalEngagement += post.upvotes;
+      engagementCount++;
     }
+    
+    // Real categorization based on post titles and content
+    const title = post.title.toLowerCase();
+    const snippet = (post.snippet || '').toLowerCase();
+    const content = title + ' ' + snippet;
+    
+    if (content.includes('career') || content.includes('job') || content.includes('interview') || content.includes('salary')) {
+      contentCategories['career'] = (contentCategories['career'] || 0) + 1;
+    } else if (content.includes('python') || content.includes('pandas') || content.includes('sql') || content.includes('jupyter')) {
+      contentCategories['programming'] = (contentCategories['programming'] || 0) + 1;
+    } else if (content.includes('machine learning') || content.includes('ml') || content.includes('model') || content.includes('algorithm')) {
+      contentCategories['machine_learning'] = (contentCategories['machine_learning'] || 0) + 1;
+    } else if (content.includes('visualization') || content.includes('tableau') || content.includes('plot') || content.includes('dashboard')) {
+      contentCategories['visualization'] = (contentCategories['visualization'] || 0) + 1;
+    } else if (content.includes('tutorial') || content.includes('guide') || content.includes('learn') || content.includes('course')) {
+      contentCategories['education'] = (contentCategories['education'] || 0) + 1;
+    } else {
+      contentCategories['discussion'] = (contentCategories['discussion'] || 0) + 1;
+    }
+    
+    // Extract real keywords from titles
+    const keywords = title.split(' ')
+      .filter(word => word.length > 4 && 
+        !['data', 'science', 'with', 'from', 'this', 'that', 'have', 'been', 'would', 'should', 'could'].includes(word))
+      .slice(0, 3);
+    topTopics.push(...keywords);
   }
 
   // Fallback analysis if OpenAI fails - extract keywords from titles

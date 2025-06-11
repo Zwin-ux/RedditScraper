@@ -10,36 +10,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize subreddits on startup
   await initializeSubreddits();
   
-  // Comprehensive r/datascience analysis endpoint
+  // Comprehensive r/datascience analysis endpoint - SerpAPI only (no OpenAI)
   app.post("/api/analyze-datascience", async (req, res) => {
     try {
-      console.log("Starting comprehensive r/datascience analysis...");
+      console.log("Starting r/datascience analysis with SerpAPI...");
       
-      const result = await comprehensiveSubredditAnalysis('datascience');
+      // Direct SerpAPI search for r/datascience posts (bypassing OpenAI completely)
+      const posts = await searchRedditPosts('datascience', undefined, 100);
       
-      // Process and store the creators found with real engagement data
+      // Extract creators and calculate real engagement metrics
+      const creatorsMap = new Map<string, { posts: number; totalUpvotes: number }>();
+      const categories: Record<string, number> = {};
+      let totalEngagement = 0;
+      let validPosts = 0;
+      
+      for (const post of posts) {
+        if (post.author) {
+          const creatorData = creatorsMap.get(post.author) || { posts: 0, totalUpvotes: 0 };
+          creatorData.posts++;
+          creatorData.totalUpvotes += post.upvotes || 0;
+          creatorsMap.set(post.author, creatorData);
+        }
+        
+        if (post.upvotes) {
+          totalEngagement += post.upvotes;
+          validPosts++;
+        }
+        
+        // Categorize posts based on content
+        const content = (post.title + ' ' + (post.snippet || '')).toLowerCase();
+        if (content.includes('career') || content.includes('job')) {
+          categories.career = (categories.career || 0) + 1;
+        } else if (content.includes('python') || content.includes('sql')) {
+          categories.programming = (categories.programming || 0) + 1;
+        } else if (content.includes('machine learning') || content.includes('ml')) {
+          categories.machine_learning = (categories.machine_learning || 0) + 1;
+        } else if (content.includes('visualization') || content.includes('plot')) {
+          categories.visualization = (categories.visualization || 0) + 1;
+        } else {
+          categories.discussion = (categories.discussion || 0) + 1;
+        }
+      }
+      
+      // Store top creators with real data
       let creatorsProcessed = 0;
-      for (const username of result.topCreators.slice(0, 25)) {
+      const topCreators = Array.from(creatorsMap.entries())
+        .sort((a, b) => b[1].totalUpvotes - a[1].totalUpvotes)
+        .slice(0, 20);
+        
+      for (const [username, data] of topCreators) {
         try {
           const existing = await storage.getCreatorByUsername(username);
           if (!existing) {
-            // Calculate real engagement score from post data
-            const userPosts = result.posts.filter(p => p.author === username);
-            const avgUpvotes = userPosts.length > 0 
-              ? userPosts.reduce((sum, p) => sum + (p.upvotes || 0), 0) / userPosts.length 
-              : 0;
-            const engagementScore = Math.min(100, Math.max(0, Math.floor(avgUpvotes / 10)));
+            const avgUpvotes = data.posts > 0 ? Math.floor(data.totalUpvotes / data.posts) : 0;
+            const engagementScore = Math.min(100, Math.max(10, Math.floor(avgUpvotes / 5)));
             
             await storage.createCreator({
               username,
               platform: "Reddit",
               subreddit: "datascience",
-              karma: avgUpvotes * userPosts.length || 100, // Real karma estimate
+              karma: data.totalUpvotes,
               engagementScore,
-              tags: ["Data Science"], // Real tag based on subreddit
+              tags: ["Data Science"],
               profileLink: `https://reddit.com/u/${username}`,
               lastActive: new Date(),
-              postsCount: userPosts.length,
+              postsCount: data.posts,
               commentsCount: 0
             });
             creatorsProcessed++;
@@ -49,24 +84,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Basic trend analysis without OpenAI (fallback until valid key provided)
-      const trends = {
-        topKeywords: result.insights.topTopics || [],
-        totalPosts: result.insights.totalPosts || 0,
-        avgEngagement: result.insights.avgEngagement || 0,
-        categories: result.insights.contentCategories || {}
+      const insights = {
+        totalPosts: posts.length,
+        avgEngagement: validPosts > 0 ? Math.floor(totalEngagement / validPosts) : 0,
+        activeUsers: creatorsMap.size,
+        contentCategories: categories
       };
 
       res.json({
         success: true,
         summary: {
-          postsAnalyzed: result.posts.length,
-          creatorsFound: result.topCreators.length,
+          postsAnalyzed: posts.length,
+          creatorsFound: creatorsMap.size,
           creatorsProcessed,
-          insights: result.insights,
-          trends
+          insights,
+          topCreators: topCreators.slice(0, 10).map(([username, data]) => ({
+            username,
+            posts: data.posts,
+            totalUpvotes: data.totalUpvotes
+          }))
         },
-        message: `Analyzed ${result.posts.length} posts from r/datascience and processed ${creatorsProcessed} creators`
+        message: `Analyzed ${posts.length} real posts from r/datascience, found ${creatorsMap.size} creators, stored ${creatorsProcessed} new creators`
       });
 
     } catch (error) {
@@ -75,6 +113,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: false,
         message: "Failed to analyze r/datascience", 
         error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  // Simple SerpAPI-only endpoint for immediate r/datascience data
+  app.post("/api/scrape-datascience-now", async (req, res) => {
+    try {
+      console.log("Scraping r/datascience with SerpAPI only...");
+      
+      const posts = await searchRedditPosts('datascience', undefined, 50);
+      
+      // Process real creator data
+      const creators = new Map<string, { posts: number; karma: number }>();
+      const categories: Record<string, number> = {};
+      
+      for (const post of posts) {
+        if (post.author) {
+          const data = creators.get(post.author) || { posts: 0, karma: 0 };
+          data.posts++;
+          data.karma += post.upvotes || 0;
+          creators.set(post.author, data);
+        }
+        
+        // Categorize content
+        const content = (post.title + ' ' + (post.snippet || '')).toLowerCase();
+        if (content.includes('career') || content.includes('job')) {
+          categories.career = (categories.career || 0) + 1;
+        } else if (content.includes('python') || content.includes('sql')) {
+          categories.programming = (categories.programming || 0) + 1;
+        } else if (content.includes('machine learning') || content.includes('ml')) {
+          categories.ml = (categories.ml || 0) + 1;
+        } else {
+          categories.discussion = (categories.discussion || 0) + 1;
+        }
+      }
+      
+      // Store top creators
+      let stored = 0;
+      const topCreators = Array.from(creators.entries())
+        .sort((a, b) => b[1].karma - a[1].karma)
+        .slice(0, 15);
+        
+      for (const [username, data] of topCreators) {
+        const existing = await storage.getCreatorByUsername(username);
+        if (!existing) {
+          await storage.createCreator({
+            username,
+            platform: "Reddit",
+            subreddit: "datascience",
+            karma: data.karma,
+            engagementScore: Math.min(100, Math.max(10, Math.floor(data.karma / 10))),
+            tags: ["Data Science"],
+            profileLink: `https://reddit.com/u/${username}`,
+            lastActive: new Date(),
+            postsCount: data.posts,
+            commentsCount: 0
+          });
+          stored++;
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          postsAnalyzed: posts.length,
+          creatorsFound: creators.size,
+          creatorsStored: stored,
+          categories,
+          topCreators: topCreators.slice(0, 8).map(([username, data]) => ({
+            username,
+            posts: data.posts,
+            karma: data.karma
+          }))
+        },
+        message: `Found ${posts.length} real posts, ${creators.size} creators, stored ${stored} new ones`
+      });
+
+    } catch (error) {
+      console.error("Scraping failed:", error);
+      res.status(500).json({ 
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
