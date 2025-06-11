@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { crawlAndProcessSubreddit, initializeSubreddits } from "./reddit";
 import { comprehensiveSubredditAnalysis, searchRedditPosts } from "./serpapi";
 import { fetchRedditPosts } from "./reddit-direct";
+import { extractRealRedditUsernames, getUserProfileFromSearch } from "./serpapi-enhanced";
 import { analyzeDataScienceTrends, analyzePostRelevance } from "./gemini";
 import { z } from "zod";
 
@@ -123,27 +124,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("Analyzing r/datascience with direct Reddit API + Google Gemini...");
       
-      let redditPosts = [];
-      try {
-        redditPosts = await fetchRedditPosts('datascience', 100);
-        console.log(`Reddit API returned ${redditPosts.length} posts`);
-      } catch (error) {
-        console.error("Reddit API failed, falling back to SerpAPI:", error);
-        // Fallback to SerpAPI with improved username extraction
-        const serpPosts = await searchRedditPosts('datascience', undefined, 50);
-        redditPosts = serpPosts.filter(p => p.author).map(p => ({
-          title: p.title,
-          author: p.author!,
-          subreddit: p.subreddit,
-          ups: p.upvotes || 0,
-          num_comments: p.comments || 0,
-          url: p.link,
-          selftext: p.snippet || '',
-          created_utc: Date.now() / 1000,
-          permalink: p.link
-        }));
-        console.log(`SerpAPI fallback returned ${redditPosts.length} posts with real usernames`);
-      }
+      // Use enhanced SerpAPI to extract real Reddit usernames
+      const redditPosts = await extractRealRedditUsernames('datascience', 100);
+      console.log(`Enhanced SerpAPI extracted ${redditPosts.length} posts with authentic usernames`);
       
       // AI-powered content analysis using Gemini
       const trends = await analyzeDataScienceTrends(
