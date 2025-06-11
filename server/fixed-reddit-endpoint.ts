@@ -134,8 +134,19 @@ export function addFixedRedditEndpoint(app: Express) {
       
       // Store in database
       let stored = 0;
+      // Only store creators with verified Reddit API data
       for (const creator of creators.slice(0, 10)) {
         try {
+          // Verify this is authentic Reddit data by checking post links
+          const hasValidPosts = creator.recentPosts.some((post: any) => 
+            post.link && post.link.includes('reddit.com') && post.timestamp > 0
+          );
+          
+          if (!hasValidPosts) {
+            console.log(`Skipping ${creator.username} - no verified Reddit posts`);
+            continue;
+          }
+          
           const existing = await storage.getCreatorByUsername(creator.username);
           if (!existing) {
             await storage.createCreator({
@@ -150,6 +161,7 @@ export function addFixedRedditEndpoint(app: Express) {
               postsCount: creator.posts,
             });
             stored++;
+            console.log(`Stored verified Reddit creator: ${creator.username}`);
           }
         } catch (error) {
           console.error(`Failed to store creator ${creator.username}:`, error);
