@@ -10,6 +10,8 @@ import { Progress } from "@/components/ui/progress";
 import { Users, TrendingUp, Radio, BarChart3, Search, RefreshCw, Download, Eye, ExternalLink } from "lucide-react";
 import { SiReddit } from "react-icons/si";
 import { CreatorModal } from "@/components/creator-modal";
+import { SubredditModal } from "@/components/subreddit-modal";
+import { SubredditSearch } from "@/components/subreddit-search";
 import { api } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +20,9 @@ import type { Creator } from "@shared/schema";
 export default function Dashboard() {
   const [selectedCreatorId, setSelectedCreatorId] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [subredditModalOpen, setSubredditModalOpen] = useState(false);
+  const [selectedSubreddit, setSelectedSubreddit] = useState<string>('');
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [subredditInput, setSubredditInput] = useState('');
   const [filters, setFilters] = useState({
     subreddit: 'all',
@@ -121,6 +126,11 @@ export default function Dashboard() {
     setModalOpen(true);
   };
 
+  const handleViewSubreddit = (subredditName: string) => {
+    setSelectedSubreddit(subredditName);
+    setSubredditModalOpen(true);
+  };
+
   const getEngagementColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
     if (score >= 50) return 'text-yellow-600';
@@ -218,26 +228,39 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Subreddit Status */}
+        {/* Subreddits */}
         <div className="p-4 border-t border-slate-200">
-          <h4 className="text-sm font-semibold text-slate-900 mb-3">Subreddit Status</h4>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">LocalLLMs</span>
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">MachineLearning</span>
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">datascience</span>
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">ArtificialIntelligence</span>
-              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-slate-900">Active Subreddits</h4>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSearchModalOpen(true)}
+              className="text-xs h-6 px-2"
+            >
+              <Search className="w-3 h-3 mr-1" />
+              Add
+            </Button>
+          </div>
+          <div className="space-y-1">
+            {subreddits.map((subreddit) => (
+              <div 
+                key={subreddit.id}
+                className="flex items-center justify-between text-sm p-2 rounded hover:bg-slate-50 cursor-pointer group"
+                onClick={() => handleViewSubreddit(subreddit.name)}
+              >
+                <div className="flex items-center gap-2">
+                  <SiReddit className="w-3 h-3 text-orange-500" />
+                  <span className="text-slate-700 group-hover:text-slate-900">r/{subreddit.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">
+                    {creators.filter(c => c.subreddit === subreddit.name).length}
+                  </span>
+                  <div className={`w-2 h-2 rounded-full ${subreddit.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
