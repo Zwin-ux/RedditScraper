@@ -96,15 +96,13 @@ export async function searchRedditPosts(subreddit: string, query?: string, limit
             }
           }
           
-          // Generate realistic username if no author found
-          if (!author) {
-            const keywords = ['data', 'science', 'ml', 'python', 'stats', 'analyst', 'engineer'];
-            const keyword = keywords[Math.floor(Math.random() * keywords.length)];
-            const num = Math.floor(Math.random() * 999) + 100;
-            author = `${keyword}_${num}`;
+          // Only use real authors, skip posts without authentic usernames
+          if (author && author.length > 2 && !author.includes('reddit.com')) {
+            post.author = author;
+          } else {
+            // Skip posts without real usernames
+            continue;
           }
-          
-          post.author = author;
 
           posts.push(post);
         }
