@@ -15,6 +15,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.error("Failed to initialize subreddits:", error);
     // Continue without subreddit initialization to allow server to start
   }
+
+  // Test Reddit API credentials endpoint
+  app.get("/api/test-reddit-credentials", async (req, res) => {
+    try {
+      const clientId = process.env.REDDIT_CLIENT_ID;
+      const clientSecret = process.env.REDDIT_CLIENT_SECRET;
+      
+      if (!clientId || !clientSecret) {
+        return res.json({
+          success: false,
+          message: "Reddit API credentials not configured",
+          details: "REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET environment variables are required"
+        });
+      }
+
+      // Test authentication
+      const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      const response = await fetch('https://www.reddit.com/api/v1/access_token', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'RedditContentAnalyzer/1.0.0'
+        },
+        body: 'grant_type=client_credentials'
+      });
+
+      const responseText = await response.text();
+      
+      if (response.ok) {
+        const data = JSON.parse(responseText);
+        res.json({
+          success: true,
+          message: "Reddit API credentials are valid",
+          hasAccessToken: !!data.access_token,
+          tokenType: data.token_type,
+          expiresIn: data.expires_in
+        });
+      } else {
+        res.json({
+          success: false,
+          message: "Reddit API authentication failed",
+          status: response.status,
+          error: responseText,
+          suggestion: "Please verify your Reddit API credentials are correct"
+        });
+      }
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to test Reddit API credentials",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
   
   // Comprehensive r/datascience analysis endpoint - Reddit API with Gemini
   app.post("/api/analyze-datascience", async (req, res) => {
@@ -135,16 +190,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log(`Getting top creators from r/${subreddit} using Reddit API...`);
       
-      // Use Reddit API with AI analysis
-      const analysis = await redditApiClient.searchWithAIAnalysis(subreddit, undefined, 100);
-      const qualityCreators = analysis.topCreators.map(creator => ({
-        username: creator.username,
-        post_link: `https://reddit.com/u/${creator.username}`,
-        upvotes: creator.totalUpvotes,
-        subreddit: subreddit,
-        timestamp: Date.now() / 1000,
-        title: `${creator.postCount} posts, ${creator.avgUpvotes} avg upvotes`
-      }));
+      // Try Reddit API first, fallback to existing data with Gemini analysis
+      let qualityCreators: any[] = [];
+      
+      try {
+        const analysis = await redditApiClient.searchWithAIAnalysis(subreddit, undefined, 100);
+        qualityCreators = analysis.topCreators.map(creator => ({
+          username: creator.username,
+          post_link: `https://reddit.com/u/${creator.username}`,
+          upvotes: creator.totalUpvotes,
+          subreddit: subreddit,
+          timestamp: Date.now() / 1000,
+          title: `${creator.postCount} posts, ${creator.avgUpvotes} avg upvotes`
+        }));
+        console.log(`Reddit API success: Found ${qualityCreators.length} creators`);
+      } catch (error) {
+        console.log(`Reddit API authentication failed, using existing database with Gemini analysis`);
+        
+        // Fallback: Get existing creators from database and enhance with Gemini
+        const existingCreators = await storage.getCreators({ 
+          subreddit: subreddit, 
+          limit: 20 
+        });
+        
+        for (const creator of existingCreators) {
+          const posts = await storage.getPostsByCreator(creator.id, 5);
+          if (posts.length > 0) {
+            try {
+              const analysis = await analyzeCreatorContent(
+                creator.username, 
+                posts.map(p => ({ title: p.title, content: p.content || '' }))
+              );
+              
+              qualityCreators.push({
+                username: creator.username,
+                post_link: `https://reddit.com/u/${creator.username}`,
+                upvotes: creator.totalKarma || 0,
+                subreddit: subreddit,
+                timestamp: Date.now() / 1000,
+                title: `Enhanced with Gemini AI - ${analysis.tags.join(', ')}`
+              });
+            } catch (analysisError) {
+              // Include creator even without AI analysis
+              qualityCreators.push({
+                username: creator.username,
+                post_link: `https://reddit.com/u/${creator.username}`,
+                upvotes: creator.karma || 0,
+                subreddit: subreddit,
+                timestamp: Date.now() / 1000,
+                title: `Database creator - ${creator.engagementScore} engagement`
+              });
+            }
+          }
+        }
+      }
       
       if (qualityCreators.length === 0) {
         return res.json({

@@ -56,19 +56,23 @@ class RedditApiClient {
 
     const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
     
+    console.log('Attempting Reddit API authentication...');
+    
     try {
       const response = await fetch(this.authUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'RedditAnalyzer/1.0 by YourApp'
+          'User-Agent': 'RedditContentAnalyzer/1.0.0'
         },
         body: 'grant_type=client_credentials'
       });
 
       if (!response.ok) {
-        throw new Error(`Token request failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`Reddit API auth failed: ${response.status} - ${errorText}`);
+        throw new Error(`Token request failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
@@ -165,8 +169,9 @@ class RedditApiClient {
         totalResults: posts.length
       };
     } catch (error) {
-      console.error(`Failed to search r/${subreddit}:`, error);
-      return { posts: [], users: [], totalResults: 0 };
+      console.error(`Reddit API failed for r/${subreddit}:`, error);
+      // Return empty result - let the calling code handle fallback
+      throw error;
     }
   }
 
