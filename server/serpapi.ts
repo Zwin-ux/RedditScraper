@@ -224,14 +224,42 @@ export async function comprehensiveSubredditAnalysis(subreddit: string): Promise
     }
   }
 
+  // Fallback analysis if OpenAI fails - extract keywords from titles
+  if (topTopics.length === 0) {
+    for (const post of uniquePosts.slice(0, 50)) {
+      const title = post.title.toLowerCase();
+      
+      // Categorize posts based on common r/datascience patterns
+      if (title.includes('career') || title.includes('job') || title.includes('interview')) {
+        contentCategories['career'] = (contentCategories['career'] || 0) + 1;
+      } else if (title.includes('python') || title.includes('pandas') || title.includes('sql')) {
+        contentCategories['programming'] = (contentCategories['programming'] || 0) + 1;
+      } else if (title.includes('machine learning') || title.includes('ml') || title.includes('model')) {
+        contentCategories['machine_learning'] = (contentCategories['machine_learning'] || 0) + 1;
+      } else if (title.includes('visualization') || title.includes('tableau') || title.includes('plot')) {
+        contentCategories['visualization'] = (contentCategories['visualization'] || 0) + 1;
+      } else {
+        contentCategories['general'] = (contentCategories['general'] || 0) + 1;
+      }
+      
+      // Extract keywords from title
+      const keywords = title.split(' ')
+        .filter(word => word.length > 4 && 
+          !['data', 'science', 'with', 'from', 'this', 'that', 'have', 'been', 'would'].includes(word))
+        .slice(0, 2);
+      topTopics.push(...keywords);
+    }
+  }
+
   // Get unique top topics
-  const uniqueTopics = [...new Set(topTopics)].slice(0, 10);
+  const topicsSet = new Set(topTopics);
+  const uniqueTopics = Array.from(topicsSet).slice(0, 15);
 
   const insights = {
     totalPosts: uniquePosts.length,
     avgEngagement: engagementCount > 0 ? Math.round(totalEngagement / engagementCount) : 0,
     topTopics: uniqueTopics,
-    activeUsers: creators.size,
+    activeUsers: Array.from(creators).length,
     contentCategories
   };
 
@@ -239,7 +267,7 @@ export async function comprehensiveSubredditAnalysis(subreddit: string): Promise
 
   return {
     posts: uniquePosts,
-    topCreators: [...creators].slice(0, 50),
+    topCreators: Array.from(creators).slice(0, 50),
     insights
   };
 }

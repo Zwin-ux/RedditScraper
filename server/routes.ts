@@ -17,22 +17,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const result = await comprehensiveSubredditAnalysis('datascience');
       
-      // Process and store the creators found
+      // Process and store the creators found with real engagement data
       let creatorsProcessed = 0;
-      for (const username of result.topCreators.slice(0, 25)) { // Process top 25 creators
+      for (const username of result.topCreators.slice(0, 25)) {
         try {
           const existing = await storage.getCreatorByUsername(username);
           if (!existing) {
+            // Calculate real engagement score from post data
+            const userPosts = result.posts.filter(p => p.author === username);
+            const avgUpvotes = userPosts.length > 0 
+              ? userPosts.reduce((sum, p) => sum + (p.upvotes || 0), 0) / userPosts.length 
+              : 0;
+            const engagementScore = Math.min(100, Math.max(0, Math.floor(avgUpvotes / 10)));
+            
             await storage.createCreator({
               username,
               platform: "Reddit",
               subreddit: "datascience",
-              karma: 1000, // Will be updated with real data
-              engagementScore: Math.floor(Math.random() * 40) + 60, // Temporary scoring
-              tags: ["Data Scientist"], // Will be enhanced with AI analysis
+              karma: avgUpvotes * userPosts.length || 100, // Real karma estimate
+              engagementScore,
+              tags: ["Data Science"], // Real tag based on subreddit
               profileLink: `https://reddit.com/u/${username}`,
               lastActive: new Date(),
-              postsCount: 0,
+              postsCount: userPosts.length,
               commentsCount: 0
             });
             creatorsProcessed++;
@@ -42,10 +49,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Analyze trends from the posts
-      const trends = await analyzeDataScienceTrends(
-        result.posts.map(p => ({ title: p.title, content: p.snippet }))
-      );
+      // Basic trend analysis without OpenAI (fallback until valid key provided)
+      const trends = {
+        topKeywords: result.insights.topTopics || [],
+        totalPosts: result.insights.totalPosts || 0,
+        avgEngagement: result.insights.avgEngagement || 0,
+        categories: result.insights.contentCategories || {}
+      };
 
       res.json({
         success: true,
