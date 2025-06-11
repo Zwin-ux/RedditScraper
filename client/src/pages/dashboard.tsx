@@ -238,30 +238,6 @@ export default function Dashboard() {
               <p className="text-slate-600">Monitor and manage AI creators from Reddit</p>
             </div>
             <div className="flex items-center space-x-4">
-              {/* Subreddit Input */}
-              <div className="flex items-center space-x-2">
-                <Input
-                  type="text"
-                  placeholder="Enter subreddit (e.g., datascience)"
-                  className="w-64"
-                  value={subredditInput}
-                  onChange={(e) => setSubredditInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleScrapeSubreddit()}
-                />
-                <Button 
-                  onClick={handleScrapeSubreddit}
-                  disabled={!subredditInput.trim() || scrapeMutation.isPending}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  {scrapeMutation.isPending ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Search className="w-4 h-4 mr-2" />
-                  )}
-                  Scrape Subreddit
-                </Button>
-              </div>
-              
               <Button 
                 onClick={() => exportMutation.mutate('csv')}
                 variant="outline"
@@ -379,18 +355,39 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center space-x-2">
-                  <label className="text-sm font-medium text-slate-700">Subreddit:</label>
-                  <Select value={filters.subreddit} onValueChange={(value) => setFilters(prev => ({ ...prev, subreddit: value }))}>
+                  <label className="text-sm font-medium text-slate-700">Scrape Subreddit:</label>
+                  <Select 
+                    value={filters.subreddit} 
+                    onValueChange={(value) => {
+                      setFilters(prev => ({ ...prev, subreddit: value }));
+                      if (value !== 'all') {
+                        scrapeMutation.mutate(value);
+                      }
+                    }}
+                  >
                     <SelectTrigger className="w-48">
-                      <SelectValue placeholder="All Subreddits" />
+                      <SelectValue placeholder="Select to scrape" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Subreddits</SelectItem>
                       {subreddits.map((sub) => (
-                        <SelectItem key={sub.id} value={sub.name}>r/{sub.name}</SelectItem>
+                        <SelectItem key={sub.id} value={sub.name}>
+                          <div className="flex items-center justify-between w-full">
+                            <span>r/{sub.name}</span>
+                            {scrapeMutation.isPending && filters.subreddit === sub.name && (
+                              <RefreshCw className="w-3 h-3 animate-spin ml-2" />
+                            )}
+                          </div>
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {scrapeMutation.isPending && (
+                    <div className="text-sm text-blue-600 flex items-center">
+                      <RefreshCw className="w-4 h-4 animate-spin mr-1" />
+                      Scraping...
+                    </div>
+                  )}
                 </div>
                 
                 <div className="flex items-center space-x-2">
