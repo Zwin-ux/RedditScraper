@@ -45,7 +45,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Categorize posts based on content
-        const content = (post.title + ' ' + (post.snippet || '')).toLowerCase();
+        const content = (post.title + ' ' + (post.selftext || '')).toLowerCase();
         if (content.includes('career') || content.includes('job')) {
           categories.career = (categories.career || 0) + 1;
         } else if (content.includes('python') || content.includes('sql')) {
@@ -133,33 +133,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      console.log(`Scraping top creators from r/${subreddit}...`);
+      console.log(`Getting top creators from r/${subreddit} using Reddit API...`);
       
-      // Try efficient scraper first
-      let qualityCreators = await scrapeTopCreators(subreddit);
-      
-      // If Reddit API is blocked, use optimized fallback with timeout
-      if (qualityCreators.length === 0) {
-        console.log(`Reddit API blocked for r/${subreddit}, using optimized search...`);
-        
-        try {
-          // Use reliable single-query scraper to avoid rate limits
-          const searchResults = await reliableScraper(subreddit);
-          
-          if (searchResults && searchResults.length > 0) {
-            qualityCreators = searchResults.map(post => ({
-              username: post.username,
-              post_link: post.post_link,
-              upvotes: post.upvotes,
-              subreddit: post.subreddit,
-              timestamp: post.timestamp,
-              title: post.title
-            }));
-          }
-        } catch (searchError) {
-          console.log(`Search failed for r/${subreddit}`);
-        }
-      }
+      // Use Reddit API with AI analysis
+      const analysis = await redditApiClient.searchWithAIAnalysis(subreddit, undefined, 100);
+      const qualityCreators = analysis.topCreators.map(creator => ({
+        username: creator.username,
+        post_link: `https://reddit.com/u/${creator.username}`,
+        upvotes: creator.totalUpvotes,
+        subreddit: subreddit,
+        timestamp: Date.now() / 1000,
+        title: `${creator.postCount} posts, ${creator.avgUpvotes} avg upvotes`
+      }));
       
       if (qualityCreators.length === 0) {
         return res.json({
@@ -270,19 +255,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("Analyzing r/datascience with direct web scraping + Google Gemini...");
       
-      // Direct web scraping of r/datascience for authentic data
-      const redditPosts = await scrapeSubredditDirect('datascience', 50);
-      console.log(`Direct scraping extracted ${redditPosts.length} authentic posts from r/datascience`);
-      
-      if (redditPosts.length === 0) {
-        console.log("No posts found from direct scraping, using enhanced search...");
-        const fallbackPosts = await extractRealRedditUsernames('datascience', 25);
-        redditPosts.push(...fallbackPosts);
-      }
+      // Use Reddit API for authentic data
+      const searchResult = await redditApiClient.searchSubreddit('datascience', undefined, 50);
+      const redditPosts = searchResult.posts;
+      console.log(`Reddit API extracted ${redditPosts.length} authentic posts from r/datascience`);
       
       // AI-powered content analysis using Gemini
       const trends = await analyzeDataScienceTrends(
-        redditPosts.map(p => ({ title: p.title, content: p.selftext }))
+        redditPosts.map((p: any) => ({ title: p.title, content: p.selftext }))
       );
       
       // Process creators with enhanced categorization using real Reddit data
