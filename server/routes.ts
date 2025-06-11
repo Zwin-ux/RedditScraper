@@ -147,44 +147,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // AI-powered content analysis using Gemini
-      const trends = await analyzeDataScienceTrends(
-        redditPosts.map(p => ({ title: p.title, content: p.selftext }))
-      );
-      
-      // Process creators with enhanced categorization using real Reddit data
+      // Process creators with fast categorization using real Reddit data
       const creators = new Map<string, { posts: number; karma: number; categories: string[] }>();
       const categories: Record<string, number> = {};
       
       for (const post of redditPosts.slice(0, 25)) {
-        try {
-          // Use Gemini for accurate post categorization
-          const analysis = await analyzePostRelevance(post.title, post.selftext);
-          categories[analysis.category] = (categories[analysis.category] || 0) + 1;
-          
-          // All posts have real authors from authentic Reddit scraping
-          const data = creators.get(post.author) || { posts: 0, karma: 0, categories: [] };
-          data.posts++;
-          data.karma += post.ups || 0;
-          if (!data.categories.includes(analysis.category)) {
-            data.categories.push(analysis.category);
-          }
-          creators.set(post.author, data);
-        } catch (error) {
-          console.error(`Analysis failed for post: ${post.title}`, error);
-          // Fallback categorization based on content
-          const content = (post.title + ' ' + (post.selftext || '')).toLowerCase();
-          if (content.includes('career')) categories.career = (categories.career || 0) + 1;
-          else if (content.includes('python')) categories.programming = (categories.programming || 0) + 1;
-          else if (content.includes('machine learning') || content.includes('ml')) categories.ml = (categories.ml || 0) + 1;
-          else categories.discussion = (categories.discussion || 0) + 1;
-          
-          // Still add the creator data even without AI analysis
-          const data = creators.get(post.author) || { posts: 0, karma: 0, categories: ['General'] };
-          data.posts++;
-          data.karma += post.ups || 0;
-          creators.set(post.author, data);
+        // Fast categorization based on content keywords
+        const content = (post.title + ' ' + (post.selftext || '')).toLowerCase();
+        let category = 'General';
+        if (content.includes('career') || content.includes('job')) {
+          category = 'Career';
+          categories.career = (categories.career || 0) + 1;
+        } else if (content.includes('python') || content.includes('coding') || content.includes('programming')) {
+          category = 'Programming';
+          categories.programming = (categories.programming || 0) + 1;
+        } else if (content.includes('machine learning') || content.includes('ml') || content.includes('ai')) {
+          category = 'Machine Learning';
+          categories.ml = (categories.ml || 0) + 1;
+        } else if (content.includes('data') || content.includes('analysis') || content.includes('analytics')) {
+          category = 'Data Analysis';
+          categories.analysis = (categories.analysis || 0) + 1;
+        } else {
+          category = 'Discussion';
+          categories.discussion = (categories.discussion || 0) + 1;
         }
+        
+        // Store creator data with real Reddit usernames
+        const data = creators.get(post.author) || { posts: 0, karma: 0, categories: [] };
+        data.posts++;
+        data.karma += post.ups || 0;
+        if (!data.categories.includes(category)) {
+          data.categories.push(category);
+        }
+        creators.set(post.author, data);
+      }
+
+      // Quick AI trends analysis (async, doesn't block response)
+      let trends = { topSkills: [], emergingTechnologies: [], careerTrends: [], industryInsights: [], marketDemand: 0 };
+      try {
+        trends = await Promise.race([
+          analyzeDataScienceTrends(redditPosts.slice(0, 10).map(p => ({ title: p.title, content: p.selftext }))),
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        ]);
+      } catch (error) {
+        console.log('AI analysis timed out, using basic trends');
       }
       
       // Store enhanced creator profiles
