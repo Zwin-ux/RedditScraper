@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, timestamp, decimal, jsonb } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -15,7 +16,7 @@ export const creators = pgTable("creators", {
   subreddit: text("subreddit").notNull(),
   karma: integer("karma").notNull().default(0),
   engagementScore: integer("engagement_score").notNull().default(0),
-  tags: jsonb("tags").$type<string[]>().default([]),
+  tags: text("tags").array().default(sql`'{}'`),
   profileLink: text("profile_link").notNull(),
   lastActive: timestamp("last_active"),
   postsCount: integer("posts_count").default(0),
