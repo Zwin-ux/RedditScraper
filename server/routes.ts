@@ -132,30 +132,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log(`Scraping r/${subreddit} for authentic Reddit creators...`);
       
-      // Use fast enhanced search with timeout for UI responsiveness
-      const searchPromise = extractRealRedditUsernames(subreddit, 15);
-      const timeoutPromise = new Promise<any[]>((_, reject) => 
-        setTimeout(() => reject(new Error('Search timeout')), 8000)
-      );
+      // Use Reddit's JSON API directly for reliable scraping
+      let redditPosts = await quickScrapeSubreddit(subreddit, 25);
       
-      let redditPosts = [];
-      try {
-        redditPosts = await Promise.race([searchPromise, timeoutPromise]);
-      } catch (error) {
-        console.log(`Search timed out or failed, using cached data`);
-        // Return what we have in database if search fails
-        const existingCreators = await storage.getCreators({ subreddit, limit: 5 });
-        if (existingCreators.length > 0) {
-          return res.json({
-            success: true,
-            data: {
-              subreddit,
-              postsAnalyzed: 0,
-              creatorsFound: existingCreators.length,
-              creatorsStored: 0,
-              message: `Found ${existingCreators.length} existing creators from r/${subreddit}`
-            }
-          });
+      // If direct Reddit API fails, try SerpAPI as backup
+      if (redditPosts.length === 0) {
+        console.log(`Direct Reddit API failed, trying SerpAPI for r/${subreddit}...`);
+        try {
+          const searchPromise = extractRealRedditUsernames(subreddit, 15);
+          const timeoutPromise = new Promise<any[]>((_, reject) => 
+            setTimeout(() => reject(new Error('Search timeout')), 6000)
+          );
+          redditPosts = await Promise.race([searchPromise, timeoutPromise]);
+        } catch (error) {
+          console.log(`SerpAPI also failed for r/${subreddit}`);
+          // Don't return here, continue to show empty result properly
         }
       }
       
@@ -208,16 +199,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         creators.set(post.author, data);
       }
 
-      // Quick AI trends analysis (async, doesn't block response)
-      let trends = { topSkills: [], emergingTechnologies: [], careerTrends: [], industryInsights: [], marketDemand: 0 };
-      try {
-        trends = await Promise.race([
-          analyzeDataScienceTrends(redditPosts.slice(0, 10).map(p => ({ title: p.title, content: p.selftext }))),
-          new Promise<any>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
-        ]);
-      } catch (error) {
-        console.log('AI analysis timed out, using basic trends');
-      }
+      // Skip AI analysis for faster response
+      const trends = { topSkills: [], emergingTechnologies: [], careerTrends: [], industryInsights: [], marketDemand: 0 };
       
       // Store enhanced creator profiles
       let stored = 0;
