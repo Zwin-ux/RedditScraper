@@ -2,19 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { crawlAndProcessSubreddit, initializeSubreddits } from "./reddit";
-import { comprehensiveSubredditAnalysis, searchRedditPosts } from "./serpapi";
-import { fetchRedditPosts } from "./reddit-direct";
-import { extractRealRedditUsernames, getUserProfileFromSearch } from "./serpapi-enhanced";
-import { scrapeSubredditDirect, scrapeUserProfile } from "./reddit-scraper";
-import { analyzeDataScienceTrends, analyzePostRelevance } from "./gemini";
-import { quickScrapeSubreddit } from "./quick-scraper";
-import { scrapeTopCreators } from "./efficient-scraper";
-import { scrapeWithAlternativeMethod, scrapeRedditDirectly } from "./alternative-scraper";
-import { robustSubredditScraper, scrapeOldReddit } from "./robust-scraper";
-import { scrapeSpecializedSubreddits, broadRedditSearch } from "./specialized-scraper";
-import { finalComprehensiveScraper } from "./final-scraper";
-import { rateLimitedScraper } from "./rate-limited-scraper";
-import { reliableScraper } from "./reliable-scraper";
+import { redditApiClient } from "./reddit-api-client";
+import { analyzeDataScienceTrends, analyzePostRelevance, analyzeCreatorContent } from "./gemini";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -27,13 +16,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Continue without subreddit initialization to allow server to start
   }
   
-  // Comprehensive r/datascience analysis endpoint - SerpAPI only (no OpenAI)
+  // Comprehensive r/datascience analysis endpoint - Reddit API with Gemini
   app.post("/api/analyze-datascience", async (req, res) => {
     try {
-      console.log("Starting r/datascience analysis with SerpAPI...");
+      console.log("Starting r/datascience analysis with Reddit API...");
       
-      // Direct SerpAPI search for r/datascience posts (bypassing OpenAI completely)
-      const posts = await searchRedditPosts('datascience', undefined, 100);
+      // Use Reddit API to get posts with AI analysis
+      const analysis = await redditApiClient.searchWithAIAnalysis('datascience', undefined, 100);
+      const posts = analysis.posts;
       
       // Extract creators and calculate real engagement metrics
       const creatorsMap = new Map<string, { posts: number; totalUpvotes: number }>();
@@ -45,12 +35,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (post.author) {
           const creatorData = creatorsMap.get(post.author) || { posts: 0, totalUpvotes: 0 };
           creatorData.posts++;
-          creatorData.totalUpvotes += post.upvotes || 0;
+          creatorData.totalUpvotes += post.ups || 0;
           creatorsMap.set(post.author, creatorData);
         }
         
-        if (post.upvotes) {
-          totalEngagement += post.upvotes;
+        if (post.ups) {
+          totalEngagement += post.ups;
           validPosts++;
         }
         
@@ -409,11 +399,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Searching r/datascience for: ${query || 'general content'}`);
       
-      const posts = await searchRedditPosts('datascience', query, limit);
+      const searchResult = await redditApiClient.searchSubreddit('datascience', query, limit);
+      const posts = searchResult.posts;
       
-      // Analyze the found posts
+      // Analyze the found posts with Gemini
       const trends = await analyzeDataScienceTrends(
-        posts.map(p => ({ title: p.title, content: p.snippet }))
+        posts.map(p => ({ title: p.title, content: p.selftext }))
       );
 
       res.json({
