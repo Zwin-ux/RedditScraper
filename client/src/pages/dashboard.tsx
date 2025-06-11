@@ -19,9 +19,9 @@ export default function Dashboard() {
   const [selectedCreatorId, setSelectedCreatorId] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [filters, setFilters] = useState({
-    subreddit: '',
-    tag: '',
-    engagementLevel: '',
+    subreddit: 'all',
+    tag: 'all',
+    engagementLevel: 'all',
     search: '',
   });
   
@@ -35,7 +35,22 @@ export default function Dashboard() {
 
   const { data: creators = [], isLoading: creatorsLoading } = useQuery({
     queryKey: ['/api/creators', filters],
-    queryFn: () => api.getCreators(filters),
+    queryFn: () => {
+      const apiFilters = {
+        ...filters,
+        subreddit: filters.subreddit === 'all' ? undefined : filters.subreddit,
+        tag: filters.tag === 'all' ? undefined : filters.tag,
+        engagementLevel: filters.engagementLevel === 'all' ? undefined : filters.engagementLevel,
+        search: filters.search || undefined,
+      };
+      // Remove undefined values
+      Object.keys(apiFilters).forEach(key => {
+        if (apiFilters[key] === undefined) {
+          delete apiFilters[key];
+        }
+      });
+      return api.getCreators(apiFilters);
+    },
   });
 
   const { data: subreddits = [] } = useQuery({
@@ -358,7 +373,7 @@ export default function Dashboard() {
                       <SelectValue placeholder="All Subreddits" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Subreddits</SelectItem>
+                      <SelectItem value="all">All Subreddits</SelectItem>
                       {subreddits.map((sub) => (
                         <SelectItem key={sub.id} value={sub.name}>r/{sub.name}</SelectItem>
                       ))}
@@ -373,7 +388,7 @@ export default function Dashboard() {
                       <SelectValue placeholder="All Tags" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Tags</SelectItem>
+                      <SelectItem value="all">All Tags</SelectItem>
                       <SelectItem value="Prompt Engineer">Prompt Engineer</SelectItem>
                       <SelectItem value="AI Tools Builder">AI Tools Builder</SelectItem>
                       <SelectItem value="Research Explainer">Research Explainer</SelectItem>
@@ -390,7 +405,7 @@ export default function Dashboard() {
                       <SelectValue placeholder="All Levels" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Levels</SelectItem>
+                      <SelectItem value="all">All Levels</SelectItem>
                       <SelectItem value="high">High (80+)</SelectItem>
                       <SelectItem value="medium">Medium (50-79)</SelectItem>
                       <SelectItem value="low">Low (0-49)</SelectItem>
