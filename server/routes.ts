@@ -7,6 +7,7 @@ import { fetchRedditPosts } from "./reddit-direct";
 import { extractRealRedditUsernames, getUserProfileFromSearch } from "./serpapi-enhanced";
 import { scrapeSubredditDirect, scrapeUserProfile } from "./reddit-scraper";
 import { analyzeDataScienceTrends, analyzePostRelevance } from "./gemini";
+import { quickScrapeSubreddit } from "./quick-scraper";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -129,11 +130,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      console.log(`Analyzing r/${subreddit} with enhanced search + Google Gemini...`);
+      console.log(`Scraping r/${subreddit} for authentic Reddit creators...`);
       
-      // Use enhanced SerpAPI to extract real Reddit usernames from any subreddit
-      const redditPosts = await extractRealRedditUsernames(subreddit, 50);
-      console.log(`Enhanced search extracted ${redditPosts.length} authentic posts from r/${subreddit}`);
+      // Try multiple scraping methods for reliability
+      let redditPosts = await quickScrapeSubreddit(subreddit, 25);
+      
+      // Fallback to enhanced search if direct scraping fails
+      if (redditPosts.length === 0) {
+        console.log(`Direct scraping failed, trying enhanced search...`);
+        redditPosts = await extractRealRedditUsernames(subreddit, 20);
+      }
+      
+      console.log(`Extracted ${redditPosts.length} authentic posts from r/${subreddit}`);
       
       if (redditPosts.length === 0) {
         return res.json({
@@ -200,21 +208,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .slice(0, 15);
         
       for (const [username, data] of topCreators) {
-        const existing = await storage.getCreatorByUsername(username);
-        if (!existing) {
-          const tags = data.categories.length > 0 ? data.categories : ["General"];
-          await storage.createCreator({
-            username,
-            platform: "Reddit",
-            subreddit,
-            karma: data.karma,
-            engagementScore: Math.min(100, Math.max(20, Math.floor(data.karma / 5))),
-            tags,
-            profileLink: `https://reddit.com/u/${username}`,
-            lastActive: new Date(),
-            postsCount: data.posts,
-          });
-          stored++;
+        try {
+          const existing = await storage.getCreatorByUsername(username);
+          if (!existing) {
+            const tags = data.categories.length > 0 ? data.categories : ["General"];
+            await storage.createCreator({
+              username,
+              platform: "Reddit",
+              subreddit,
+              karma: data.karma,
+              engagementScore: Math.min(100, Math.max(20, Math.floor(data.karma / 5))),
+              tags,
+              profileLink: `https://reddit.com/u/${username}`,
+              lastActive: new Date(),
+              postsCount: data.posts,
+            });
+            stored++;
+          }
+        } catch (error) {
+          console.error(`Failed to store creator ${username}:`, error);
+          // Continue with other creators even if one fails
         }
       }
 
