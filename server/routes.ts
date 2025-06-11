@@ -137,45 +137,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Try efficient scraper first
       let qualityCreators = await scrapeTopCreators(subreddit);
       
-      // If Reddit API is blocked, try multiple fallback methods
+      // If Reddit API is blocked, use optimized fallback with timeout
       if (qualityCreators.length === 0) {
-        console.log(`Reddit API blocked for r/${subreddit}, trying fallback methods...`);
+        console.log(`Reddit API blocked for r/${subreddit}, using optimized search...`);
         
-        // Try enhanced search API first
         try {
-          const searchResults = await extractRealRedditUsernames(subreddit, 15);
-          qualityCreators = searchResults.map(post => ({
-            username: post.author,
-            post_link: `https://reddit.com${post.permalink || ''}`,
-            upvotes: post.ups || 0,
-            subreddit: post.subreddit || subreddit,
-            timestamp: post.created_utc || Date.now() / 1000,
-            title: post.title || 'Post'
-          }));
+          // Fast search with 5-second timeout
+          const searchPromise = Promise.race([
+            extractRealRedditUsernames(subreddit, 10),
+            new Promise<any[]>((_, reject) => 
+              setTimeout(() => reject(new Error('Search timeout')), 5000)
+            )
+          ]);
+          
+          const searchResults = await searchPromise;
+          
+          // Convert results to standard format
+          if (searchResults && searchResults.length > 0) {
+            qualityCreators = searchResults.map(post => ({
+              username: post.author || post.username,
+              post_link: post.permalink ? `https://reddit.com${post.permalink}` : post.post_link || '',
+              upvotes: post.ups || post.upvotes || 0,
+              subreddit: post.subreddit || subreddit,
+              timestamp: post.created_utc || post.timestamp || Date.now() / 1000,
+              title: post.title || 'Post'
+            }));
+          }
         } catch (searchError) {
-          console.log(`Enhanced search failed for r/${subreddit}`);
-        }
-        
-        // If still no results, try alternative scraping method
-        if (qualityCreators.length === 0) {
-          console.log(`Trying alternative method for r/${subreddit}...`);
-          try {
-            const altResults = await scrapeWithAlternativeMethod(subreddit);
-            qualityCreators = altResults;
-          } catch (altError) {
-            console.log(`Alternative method failed for r/${subreddit}`);
-          }
-        }
-        
-        // Final fallback: direct Reddit scraping
-        if (qualityCreators.length === 0) {
-          console.log(`Trying direct Reddit scraping for r/${subreddit}...`);
-          try {
-            const directResults = await scrapeRedditDirectly(subreddit);
-            qualityCreators = directResults;
-          } catch (directError) {
-            console.log(`Direct scraping failed for r/${subreddit}`);
-          }
+          console.log(`All search methods failed or timed out for r/${subreddit}`);
         }
       }
       
