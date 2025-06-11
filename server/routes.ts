@@ -8,6 +8,7 @@ import { extractRealRedditUsernames, getUserProfileFromSearch } from "./serpapi-
 import { scrapeSubredditDirect, scrapeUserProfile } from "./reddit-scraper";
 import { analyzeDataScienceTrends, analyzePostRelevance } from "./gemini";
 import { quickScrapeSubreddit } from "./quick-scraper";
+import { scrapeTopCreators } from "./efficient-scraper";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -130,46 +131,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      console.log(`Scraping r/${subreddit} for authentic Reddit creators...`);
+      console.log(`Scraping top creators from r/${subreddit}...`);
       
-      // Use multiple approaches for maximum reliability
-      let redditPosts = await quickScrapeSubreddit(subreddit, 25);
+      // Try efficient scraper first
+      let qualityCreators = await scrapeTopCreators(subreddit);
       
-      // If Reddit API blocked, try fast SerpAPI search
-      if (redditPosts.length === 0) {
-        console.log(`Reddit API blocked, trying fast search for r/${subreddit}...`);
+      // If Reddit API is blocked, use search API as primary method
+      if (qualityCreators.length === 0) {
+        console.log(`Reddit API blocked for r/${subreddit}, using search API...`);
         try {
-          const fastSearch = Promise.race([
-            extractRealRedditUsernames(subreddit, 12),
-            new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
-          ]);
-          redditPosts = await fastSearch;
-        } catch (error) {
-          console.log(`Search timed out for r/${subreddit}, proceeding with empty results`);
+          const searchResults = await extractRealRedditUsernames(subreddit, 15);
+          
+          // Convert search results to creator format
+          qualityCreators = searchResults.map(post => ({
+            username: post.author,
+            post_link: `https://reddit.com${post.permalink || ''}`,
+            upvotes: post.ups || 0,
+            subreddit: post.subreddit || subreddit,
+            timestamp: post.created_utc || Date.now() / 1000,
+            title: post.title || 'Post'
+          }));
+        } catch (searchError) {
+          console.log(`Search also failed for r/${subreddit}`);
         }
       }
       
-      console.log(`Extracted ${redditPosts.length} authentic posts from r/${subreddit}`);
-      
-      if (redditPosts.length === 0) {
+      if (qualityCreators.length === 0) {
         return res.json({
           success: true,
           data: {
             subreddit,
             postsAnalyzed: 0,
             creatorsStored: 0,
-            message: `No posts found for r/${subreddit}. Try a different subreddit.`
+            message: `No creators found in r/${subreddit}. This subreddit may be private or have no recent activity.`
           }
         });
       }
       
-      // Process creators with fast categorization using real Reddit data
+      // Process and categorize creators
       const creators = new Map<string, { posts: number; karma: number; categories: string[] }>();
       const categories: Record<string, number> = {};
       
-      for (const post of redditPosts.slice(0, 25)) {
+      for (const creator of qualityCreators) {
         // Fast categorization based on content keywords
-        const content = (post.title + ' ' + (post.selftext || '')).toLowerCase();
+        const content = creator.title.toLowerCase();
         let category = 'General';
         if (content.includes('career') || content.includes('job')) {
           category = 'Career';
@@ -188,20 +193,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           categories.discussion = (categories.discussion || 0) + 1;
         }
         
-        // Store creator data with real Reddit usernames
-        const data = creators.get(post.author) || { posts: 0, karma: 0, categories: [] };
+        // Store creator data with real metrics
+        const data = creators.get(creator.username) || { posts: 0, karma: 0, categories: [] };
         data.posts++;
-        data.karma += post.ups || 0;
+        data.karma += creator.upvotes;
         if (!data.categories.includes(category)) {
           data.categories.push(category);
         }
-        creators.set(post.author, data);
+        creators.set(creator.username, data);
       }
-
-      // Skip AI analysis for faster response
-      const trends = { topSkills: [], emergingTechnologies: [], careerTrends: [], industryInsights: [], marketDemand: 0 };
       
-      // Store enhanced creator profiles
+      // Store creator profiles in database
       let stored = 0;
       const topCreators = Array.from(creators.entries())
         .sort((a, b) => b[1].karma - a[1].karma)
@@ -227,7 +229,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } catch (error) {
           console.error(`Failed to store creator ${username}:`, error);
-          // Continue with other creators even if one fails
         }
       }
 
@@ -235,19 +236,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true,
         data: {
           subreddit,
-          postsAnalyzed: redditPosts.length,
+          postsAnalyzed: qualityCreators.length,
           creatorsFound: creators.size,
           creatorsStored: stored,
           categories,
-          trends,
           topCreators: topCreators.slice(0, 8).map(([username, data]) => ({
             username,
             posts: data.posts,
             karma: data.karma,
-            specialties: data.categories
+            specialties: data.categories,
+            recent_post: qualityCreators.find(c => c.username === username)?.post_link
           }))
         },
-        message: `Analyzed ${redditPosts.length} posts from r/${subreddit}, found ${creators.size} creators, stored ${stored} new profiles`
+        message: `Found ${creators.size} quality creators from r/${subreddit}, stored ${stored} new profiles`
       });
 
     } catch (error) {
