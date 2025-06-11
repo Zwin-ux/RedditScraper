@@ -5,6 +5,7 @@ import { crawlAndProcessSubreddit, initializeSubreddits } from "./reddit";
 import { comprehensiveSubredditAnalysis, searchRedditPosts } from "./serpapi";
 import { fetchRedditPosts } from "./reddit-direct";
 import { extractRealRedditUsernames, getUserProfileFromSearch } from "./serpapi-enhanced";
+import { scrapeSubredditDirect, scrapeUserProfile } from "./reddit-scraper";
 import { analyzeDataScienceTrends, analyzePostRelevance } from "./gemini";
 import { z } from "zod";
 
@@ -122,11 +123,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enhanced r/datascience analysis with Google Gemini
   app.post("/api/scrape-datascience-now", async (req, res) => {
     try {
-      console.log("Analyzing r/datascience with direct Reddit API + Google Gemini...");
+      console.log("Analyzing r/datascience with direct web scraping + Google Gemini...");
       
-      // Use enhanced SerpAPI to extract real Reddit usernames
-      const redditPosts = await extractRealRedditUsernames('datascience', 100);
-      console.log(`Enhanced SerpAPI extracted ${redditPosts.length} posts with authentic usernames`);
+      // Direct web scraping of r/datascience for authentic data
+      const redditPosts = await scrapeSubredditDirect('datascience', 50);
+      console.log(`Direct scraping extracted ${redditPosts.length} authentic posts from r/datascience`);
+      
+      if (redditPosts.length === 0) {
+        console.log("No posts found from direct scraping, using enhanced search...");
+        const fallbackPosts = await extractRealRedditUsernames('datascience', 25);
+        redditPosts.push(...fallbackPosts);
+      }
       
       // AI-powered content analysis using Gemini
       const trends = await analyzeDataScienceTrends(
@@ -137,13 +144,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const creators = new Map<string, { posts: number; karma: number; categories: string[] }>();
       const categories: Record<string, number> = {};
       
-      for (const post of redditPosts.slice(0, 50)) {
+      for (const post of redditPosts.slice(0, 25)) {
         try {
           // Use Gemini for accurate post categorization
           const analysis = await analyzePostRelevance(post.title, post.selftext);
           categories[analysis.category] = (categories[analysis.category] || 0) + 1;
           
-          // All posts from Reddit API have real authors
+          // All posts have real authors from authentic Reddit scraping
           const data = creators.get(post.author) || { posts: 0, karma: 0, categories: [] };
           data.posts++;
           data.karma += post.ups || 0;
@@ -157,7 +164,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const content = (post.title + ' ' + (post.selftext || '')).toLowerCase();
           if (content.includes('career')) categories.career = (categories.career || 0) + 1;
           else if (content.includes('python')) categories.programming = (categories.programming || 0) + 1;
+          else if (content.includes('machine learning') || content.includes('ml')) categories.ml = (categories.ml || 0) + 1;
           else categories.discussion = (categories.discussion || 0) + 1;
+          
+          // Still add the creator data even without AI analysis
+          const data = creators.get(post.author) || { posts: 0, karma: 0, categories: ['Data Science'] };
+          data.posts++;
+          data.karma += post.ups || 0;
+          creators.set(post.author, data);
         }
       }
       
