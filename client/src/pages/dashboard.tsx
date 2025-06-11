@@ -631,6 +631,19 @@ export default function Dashboard() {
         open={modalOpen}
         onOpenChange={setModalOpen}
       />
+
+      {/* Subreddit Detail Modal */}
+      <SubredditModal
+        isOpen={subredditModalOpen}
+        onClose={() => setSubredditModalOpen(false)}
+        subredditName={selectedSubreddit}
+      />
+
+      {/* Subreddit Search Modal */}
+      <SubredditSearch
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+      />
     </div>
   );
 }
