@@ -21,7 +21,7 @@ export async function analyzeCreatorContent(
   comments: Array<{ content: string; upvotes: number }>
 ): Promise<CreatorAnalysis> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const content = posts.map(p => `${p.title} ${p.content || ''}`).join('\n') + 
                    comments.map(c => c.content).join('\n');
@@ -77,7 +77,7 @@ export async function analyzePostRelevance(title: string, content?: string): Pro
   topics: string[];
 }> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `Analyze this r/datascience post and categorize it:
 
@@ -130,7 +130,7 @@ Respond in JSON:
 
 export async function analyzeDataScienceTrends(posts: Array<{title: string, content?: string}>): Promise<DataScienceTrends> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const postsText = posts.slice(0, 20).map(p => `${p.title} ${p.content || ''}`).join('\n');
 
