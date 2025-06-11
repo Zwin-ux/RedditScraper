@@ -132,21 +132,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log(`Scraping r/${subreddit} for authentic Reddit creators...`);
       
-      // Use Reddit's JSON API directly for reliable scraping
+      // Use multiple approaches for maximum reliability
       let redditPosts = await quickScrapeSubreddit(subreddit, 25);
       
-      // If direct Reddit API fails, try SerpAPI as backup
+      // If Reddit API blocked, try fast SerpAPI search
       if (redditPosts.length === 0) {
-        console.log(`Direct Reddit API failed, trying SerpAPI for r/${subreddit}...`);
+        console.log(`Reddit API blocked, trying fast search for r/${subreddit}...`);
         try {
-          const searchPromise = extractRealRedditUsernames(subreddit, 15);
-          const timeoutPromise = new Promise<any[]>((_, reject) => 
-            setTimeout(() => reject(new Error('Search timeout')), 6000)
-          );
-          redditPosts = await Promise.race([searchPromise, timeoutPromise]);
+          const fastSearch = Promise.race([
+            extractRealRedditUsernames(subreddit, 12),
+            new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+          ]);
+          redditPosts = await fastSearch;
         } catch (error) {
-          console.log(`SerpAPI also failed for r/${subreddit}`);
-          // Don't return here, continue to show empty result properly
+          console.log(`Search timed out for r/${subreddit}, proceeding with empty results`);
         }
       }
       
