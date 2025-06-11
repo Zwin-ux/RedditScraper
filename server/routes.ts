@@ -14,6 +14,7 @@ import { robustSubredditScraper, scrapeOldReddit } from "./robust-scraper";
 import { scrapeSpecializedSubreddits, broadRedditSearch } from "./specialized-scraper";
 import { finalComprehensiveScraper } from "./final-scraper";
 import { rateLimitedScraper } from "./rate-limited-scraper";
+import { reliableScraper } from "./reliable-scraper";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -146,10 +147,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Reddit API blocked for r/${subreddit}, using optimized search...`);
         
         try {
-          // Use rate-limited scraper to avoid API limits
-          const searchResults = await rateLimitedScraper(subreddit);
+          // Use reliable single-query scraper to avoid rate limits
+          const searchResults = await reliableScraper(subreddit);
           
-          // Convert results to standard format
           if (searchResults && searchResults.length > 0) {
             qualityCreators = searchResults.map(post => ({
               username: post.username,

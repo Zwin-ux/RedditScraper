@@ -133,8 +133,8 @@ export async function extractRealRedditUsernames(subreddit: string, limit = 100)
         }
       }
 
-      // Rate limiting between requests
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Increased rate limiting to avoid 429 errors
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
     } catch (error) {
       console.error(`Error in search strategy "${searchQuery}":`, error);
