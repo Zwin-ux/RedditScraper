@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { crawlAndProcessSubreddit, initializeSubreddits } from "./reddit";
 import { redditApiClient } from "./reddit-api-client";
+import { RedditScraperV2, ScrapingOptions } from "./reddit-scraper-v2";
 import { analyzeDataScienceTrends, analyzePostRelevance, analyzeCreatorContent } from "./gemini";
 import { z } from "zod";
 
@@ -67,6 +68,201 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: false,
         message: "Failed to test Reddit API credentials",
         error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Advanced Reddit Scraper V2 Endpoints
+  app.post("/api/v2/scrape", async (req, res) => {
+    try {
+      const {
+        subreddit,
+        limit = 100,
+        timeframe = 'week',
+        sort = 'hot',
+        flairFilter,
+        keywordFilter,
+        minScore,
+        maxAge,
+        outputFormat = 'json',
+        usePushshift = true,
+        enableLogging = true
+      } = req.body;
+
+      if (!subreddit) {
+        return res.status(400).json({
+          success: false,
+          error: "Subreddit parameter is required"
+        });
+      }
+
+      const scrapingOptions: ScrapingOptions = {
+        subreddit,
+        limit: parseInt(limit),
+        timeframe,
+        sort,
+        flairFilter: Array.isArray(flairFilter) ? flairFilter : undefined,
+        keywordFilter: Array.isArray(keywordFilter) ? keywordFilter : undefined,
+        minScore: minScore ? parseInt(minScore) : undefined,
+        maxAge: maxAge ? parseInt(maxAge) : undefined,
+        outputFormat,
+        usePushshift,
+        enableLogging,
+        maxRetries: 3,
+        retryDelay: 2000
+      };
+
+      const scraper = new RedditScraperV2(scrapingOptions);
+      const result = await scraper.scrapeSubreddit(scrapingOptions);
+
+      res.json({
+        success: true,
+        data: result,
+        message: `Successfully scraped ${result.totalFound} posts from r/${subreddit}`
+      });
+
+    } catch (error) {
+      console.error("Reddit Scraper V2 error:", error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: "Failed to scrape subreddit"
+      });
+    }
+  });
+
+  app.post("/api/v2/batch-scrape", async (req, res) => {
+    try {
+      const {
+        subreddits,
+        limit = 50,
+        sort = 'hot',
+        outputFormat = 'json',
+        enableLogging = true
+      } = req.body;
+
+      if (!Array.isArray(subreddits) || subreddits.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Subreddits array is required"
+        });
+      }
+
+      const baseOptions = {
+        limit: parseInt(limit),
+        sort,
+        outputFormat,
+        enableLogging,
+        maxRetries: 3,
+        retryDelay: 2000
+      };
+
+      const scraper = new RedditScraperV2();
+      const results = await scraper.scrapeMultipleSubreddits(subreddits, baseOptions);
+      const stats = scraper.getStats(results);
+
+      res.json({
+        success: true,
+        data: {
+          results,
+          stats
+        },
+        message: `Batch scraping completed for ${subreddits.length} subreddits`
+      });
+
+    } catch (error) {
+      console.error("Batch scraping error:", error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: "Failed to complete batch scraping"
+      });
+    }
+  });
+
+  app.get("/api/v2/test-reddit-auth", async (req, res) => {
+    try {
+      const scraper = new RedditScraperV2({ subreddit: 'test', enableLogging: false });
+      await (scraper as any).authenticate();
+      
+      res.json({
+        success: true,
+        message: "Reddit API authentication successful",
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(401).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: "Reddit API authentication failed"
+      });
+    }
+  });
+
+  app.post("/api/v2/scrape-with-ai", async (req, res) => {
+    try {
+      const {
+        subreddit,
+        limit = 50,
+        sort = 'hot',
+        keywordFilter,
+        minScore = 10
+      } = req.body;
+
+      if (!subreddit) {
+        return res.status(400).json({
+          success: false,
+          error: "Subreddit parameter is required"
+        });
+      }
+
+      // First scrape with Reddit API
+      const scrapingOptions: ScrapingOptions = {
+        subreddit,
+        limit: parseInt(limit),
+        sort,
+        keywordFilter: Array.isArray(keywordFilter) ? keywordFilter : undefined,
+        minScore: parseInt(minScore),
+        enableLogging: true,
+        usePushshift: true
+      };
+
+      const scraper = new RedditScraperV2(scrapingOptions);
+      const result = await scraper.scrapeSubreddit(scrapingOptions);
+
+      // Enhance with AI analysis using Gemini
+      const enhancedPosts = [];
+      for (const post of result.posts.slice(0, 20)) { // Limit AI analysis to first 20 posts
+        try {
+          const analysis = await analyzePostRelevance(post.title, post.selftext);
+          enhancedPosts.push({
+            ...post,
+            aiAnalysis: analysis
+          });
+        } catch (error) {
+          enhancedPosts.push({
+            ...post,
+            aiAnalysis: { error: 'Analysis failed' }
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          ...result,
+          posts: enhancedPosts,
+          aiEnhanced: true
+        },
+        message: `Scraped and analyzed ${result.totalFound} posts from r/${subreddit}`
+      });
+
+    } catch (error) {
+      console.error("AI-enhanced scraping error:", error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: "Failed to scrape and analyze subreddit"
       });
     }
   });
