@@ -121,7 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Universal subreddit scraping endpoint
+  // Fast subreddit scraping endpoint for UI button
   app.post("/api/scrape-subreddit", async (req, res) => {
     const { subreddit } = req.body;
     
@@ -132,13 +132,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log(`Scraping r/${subreddit} for authentic Reddit creators...`);
       
-      // Try multiple scraping methods for reliability
-      let redditPosts = await quickScrapeSubreddit(subreddit, 25);
+      // Use fast enhanced search with timeout for UI responsiveness
+      const searchPromise = extractRealRedditUsernames(subreddit, 15);
+      const timeoutPromise = new Promise<any[]>((_, reject) => 
+        setTimeout(() => reject(new Error('Search timeout')), 8000)
+      );
       
-      // Fallback to enhanced search if direct scraping fails
-      if (redditPosts.length === 0) {
-        console.log(`Direct scraping failed, trying enhanced search...`);
-        redditPosts = await extractRealRedditUsernames(subreddit, 20);
+      let redditPosts = [];
+      try {
+        redditPosts = await Promise.race([searchPromise, timeoutPromise]);
+      } catch (error) {
+        console.log(`Search timed out or failed, using cached data`);
+        // Return what we have in database if search fails
+        const existingCreators = await storage.getCreators({ subreddit, limit: 5 });
+        if (existingCreators.length > 0) {
+          return res.json({
+            success: true,
+            data: {
+              subreddit,
+              postsAnalyzed: 0,
+              creatorsFound: existingCreators.length,
+              creatorsStored: 0,
+              message: `Found ${existingCreators.length} existing creators from r/${subreddit}`
+            }
+          });
+        }
       }
       
       console.log(`Extracted ${redditPosts.length} authentic posts from r/${subreddit}`);
