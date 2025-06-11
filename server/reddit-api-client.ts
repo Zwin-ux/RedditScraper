@@ -113,8 +113,8 @@ class RedditApiClient {
   async searchSubreddit(subreddit: string, query?: string, limit: number = 100): Promise<RedditSearchResult> {
     try {
       const endpoint = query 
-        ? `/r/${subreddit}/search`
-        : `/r/${subreddit}/hot`;
+        ? `/r/${subreddit}/search.json`
+        : `/r/${subreddit}/hot.json`;
       
       const params: Record<string, any> = {
         limit: Math.min(limit, 100),
