@@ -1,0 +1,149 @@
+import type { Express } from "express";
+import { RedditScraperV2 } from './reddit-scraper-v2';
+import { storage } from './storage';
+
+export function addFixedRedditEndpoint(app: Express) {
+  app.post("/api/scrape-subreddit-fixed", async (req, res) => {
+    const { subreddit } = req.body;
+    
+    if (!subreddit) {
+      return res.status(400).json({ success: false, error: "Subreddit name is required" });
+    }
+
+    try {
+      console.log(`Scraping r/${subreddit} for active creators...`);
+      
+      // Use Reddit Scraper V2 to get actual posts
+      const scraper = new RedditScraperV2({
+        subreddit,
+        limit: 50,
+        sort: 'hot',
+        minScore: 2,
+        enableLogging: false,
+        usePushshift: true
+      });
+      
+      const result = await scraper.scrapeSubreddit({
+        subreddit,
+        limit: 50,
+        sort: 'hot',
+        minScore: 2,
+        enableLogging: false,
+        usePushshift: true
+      });
+      
+      console.log(`Found ${result.posts.length} posts from r/${subreddit}`);
+      
+      // Extract creators from posts
+      const creatorMap = new Map();
+      
+      for (const post of result.posts) {
+        const username = post.author;
+        if (username === '[deleted]' || username === 'AutoModerator' || username === 'automoderator') {
+          continue;
+        }
+        
+        if (!creatorMap.has(username)) {
+          creatorMap.set(username, {
+            username,
+            posts: 0,
+            totalScore: 0,
+            categories: new Set(),
+            recentPosts: []
+          });
+        }
+        
+        const creator = creatorMap.get(username);
+        creator.posts += 1;
+        creator.totalScore += post.score || 0;
+        creator.recentPosts.push({
+          title: post.title.substring(0, 80),
+          score: post.score || 0,
+          comments: post.num_comments || 0
+        });
+        
+        // Categorize based on content
+        const content = (post.title + ' ' + (post.selftext || '')).toLowerCase();
+        if (content.includes('career') || content.includes('job')) {
+          creator.categories.add('Career');
+        }
+        if (content.includes('python') || content.includes('coding') || content.includes('programming')) {
+          creator.categories.add('Programming');
+        }
+        if (content.includes('machine learning') || content.includes('ml') || content.includes('ai')) {
+          creator.categories.add('Machine Learning');
+        }
+        if (content.includes('data') || content.includes('analysis') || content.includes('visualization')) {
+          creator.categories.add('Data Analysis');
+        }
+        if (content.includes('research') || content.includes('paper')) {
+          creator.categories.add('Research');
+        }
+        if (creator.categories.size === 0) {
+          creator.categories.add('Discussion');
+        }
+      }
+      
+      // Filter and sort creators
+      const creators = Array.from(creatorMap.values())
+        .filter(creator => creator.posts >= 1 && creator.totalScore >= 3)
+        .sort((a, b) => {
+          const scoreA = a.totalScore + (a.posts * 2);
+          const scoreB = b.totalScore + (b.posts * 2);
+          return scoreB - scoreA;
+        })
+        .slice(0, 15);
+      
+      // Store in database
+      let stored = 0;
+      for (const creator of creators.slice(0, 10)) {
+        try {
+          const existing = await storage.getCreatorByUsername(creator.username);
+          if (!existing) {
+            await storage.createCreator({
+              username: creator.username,
+              platform: "Reddit",
+              subreddit,
+              karma: creator.totalScore,
+              engagementScore: Math.min(100, Math.max(20, Math.floor(creator.totalScore / 2))),
+              tags: Array.from(creator.categories),
+              profileLink: `https://reddit.com/u/${creator.username}`,
+              lastActive: new Date(),
+              postsCount: creator.posts,
+            });
+            stored++;
+          }
+        } catch (error) {
+          console.error(`Failed to store creator ${creator.username}:`, error);
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          subreddit,
+          postsAnalyzed: result.posts.length,
+          creatorsFound: creators.length,
+          creatorsStored: stored,
+          topCreators: creators.slice(0, 8).map(creator => ({
+            username: creator.username,
+            posts: creator.posts,
+            karma: creator.totalScore,
+            avgScore: Math.round(creator.totalScore / creator.posts),
+            specialties: Array.from(creator.categories),
+            profileLink: `https://reddit.com/u/${creator.username}`,
+            recentActivity: creator.recentPosts[0]?.title || 'No recent posts'
+          }))
+        },
+        message: `Found ${creators.length} active creators from ${result.posts.length} posts in r/${subreddit}, stored ${stored} new profiles`
+      });
+
+    } catch (error) {
+      console.error(`Reddit scraping failed for r/${subreddit}:`, error);
+      res.status(500).json({ 
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+}

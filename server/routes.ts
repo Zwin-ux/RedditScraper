@@ -4,6 +4,8 @@ import { storage } from "./storage";
 import { crawlAndProcessSubreddit, initializeSubreddits } from "./reddit";
 import { redditApiClient } from "./reddit-api-client";
 import { RedditScraperV2, ScrapingOptions } from "./reddit-scraper-v2";
+import { scrapeSubredditCreators, enhanceCreatorsWithAI } from "./simple-reddit-scraper";
+import { addFixedRedditEndpoint } from "./fixed-reddit-endpoint";
 import { analyzeDataScienceTrends, analyzePostRelevance, analyzeCreatorContent } from "./gemini";
 import { z } from "zod";
 
@@ -919,6 +921,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to export creator data" });
     }
   });
+
+  // Add the fixed Reddit scraping endpoint
+  addFixedRedditEndpoint(app);
 
   const httpServer = createServer(app);
   return httpServer;
