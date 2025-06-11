@@ -24,6 +24,11 @@ export async function extractRealRedditUsernames(subreddit: string, limit = 100)
     `site:reddit.com/r/${subreddit}/comments "u/"`,
     `site:reddit.com/r/${subreddit} "author:" -site:reddit.com/user`,
     `"r/${subreddit}" "by u/" reddit.com`,
+    // Additional strategies for newer/smaller subreddits
+    `"u/" site:reddit.com/r/${subreddit}`,
+    `reddit.com/r/${subreddit} "submitted" "u/"`,
+    `"reddit.com/r/${subreddit}" "u/" -"subreddit"`,
+    `site:reddit.com "${subreddit}" "u/" posts`,
   ];
 
   for (const searchQuery of searchStrategies) {

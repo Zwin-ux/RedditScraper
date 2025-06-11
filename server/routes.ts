@@ -9,6 +9,7 @@ import { scrapeSubredditDirect, scrapeUserProfile } from "./reddit-scraper";
 import { analyzeDataScienceTrends, analyzePostRelevance } from "./gemini";
 import { quickScrapeSubreddit } from "./quick-scraper";
 import { scrapeTopCreators } from "./efficient-scraper";
+import { scrapeWithAlternativeMethod, scrapeRedditDirectly } from "./alternative-scraper";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -136,13 +137,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Try efficient scraper first
       let qualityCreators = await scrapeTopCreators(subreddit);
       
-      // If Reddit API is blocked, use search API as primary method
+      // If Reddit API is blocked, try multiple fallback methods
       if (qualityCreators.length === 0) {
-        console.log(`Reddit API blocked for r/${subreddit}, using search API...`);
+        console.log(`Reddit API blocked for r/${subreddit}, trying fallback methods...`);
+        
+        // Try enhanced search API first
         try {
           const searchResults = await extractRealRedditUsernames(subreddit, 15);
-          
-          // Convert search results to creator format
           qualityCreators = searchResults.map(post => ({
             username: post.author,
             post_link: `https://reddit.com${post.permalink || ''}`,
@@ -152,7 +153,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
             title: post.title || 'Post'
           }));
         } catch (searchError) {
-          console.log(`Search also failed for r/${subreddit}`);
+          console.log(`Enhanced search failed for r/${subreddit}`);
+        }
+        
+        // If still no results, try alternative scraping method
+        if (qualityCreators.length === 0) {
+          console.log(`Trying alternative method for r/${subreddit}...`);
+          try {
+            const altResults = await scrapeWithAlternativeMethod(subreddit);
+            qualityCreators = altResults;
+          } catch (altError) {
+            console.log(`Alternative method failed for r/${subreddit}`);
+          }
+        }
+        
+        // Final fallback: direct Reddit scraping
+        if (qualityCreators.length === 0) {
+          console.log(`Trying direct Reddit scraping for r/${subreddit}...`);
+          try {
+            const directResults = await scrapeRedditDirectly(subreddit);
+            qualityCreators = directResults;
+          } catch (directError) {
+            console.log(`Direct scraping failed for r/${subreddit}`);
+          }
         }
       }
       
