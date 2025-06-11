@@ -76,33 +76,34 @@ export async function searchRedditPosts(subreddit: string, query?: string, limit
             }
           }
 
-          // Extract author from link patterns
+          // Extract real Reddit username from snippets and titles
           let author = null;
           
-          // Try different Reddit URL patterns to extract username
-          const patterns = [
-            /\/u\/([^\/\?\s]+)/,  // /u/username
-            /\/user\/([^\/\?\s]+)/, // /user/username
-            /\/comments\/[^\/]+\/[^\/]+\/([^\/\?\s]+)/, // post author from comments URL
-            /by\s+u\/([^\/\?\s]+)/, // "by u/username" in snippet
-            /\/([^\/\?\s]+)\/submitted/ // username/submitted
+          // Search for author patterns in snippet and title
+          const textToSearch = `${result.snippet || ''} ${result.title || ''}`;
+          const authorPatterns = [
+            /submitted.*?by\s+u\/([a-zA-Z0-9_-]+)/i,
+            /posted.*?by\s+u\/([a-zA-Z0-9_-]+)/i,
+            /by\s+u\/([a-zA-Z0-9_-]+)/i,
+            /u\/([a-zA-Z0-9_-]+)\s+posted/i,
+            /u\/([a-zA-Z0-9_-]+)\s+submitted/i,
+            /\s+u\/([a-zA-Z0-9_-]+)\s+/i
           ];
           
-          for (const pattern of patterns) {
-            const match = result.link.match(pattern) || (result.snippet || '').match(pattern);
-            if (match && match[1] && match[1] !== 'datascience' && match[1].length > 2) {
+          for (const pattern of authorPatterns) {
+            const match = textToSearch.match(pattern);
+            if (match && match[1] && match[1] !== subreddit && match[1].length >= 3) {
               author = match[1];
               break;
             }
           }
           
-          // Only use real authors, skip posts without authentic usernames
-          if (author && author.length > 2 && !author.includes('reddit.com')) {
-            post.author = author;
-          } else {
-            // Skip posts without real usernames
-            continue;
+          // Only include posts with real usernames found in text
+          if (!author) {
+            continue; // Skip posts without extractable real usernames
           }
+          
+          post.author = author;
 
           posts.push(post);
         }

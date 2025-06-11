@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { crawlAndProcessSubreddit, initializeSubreddits } from "./reddit";
 import { comprehensiveSubredditAnalysis, searchRedditPosts } from "./serpapi";
+import { fetchRedditPosts } from "./reddit-direct";
 import { analyzeDataScienceTrends, analyzePostRelevance } from "./gemini";
 import { z } from "zod";
 
