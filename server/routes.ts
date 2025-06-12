@@ -452,19 +452,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const posts = creator.posts.slice(0, 3).map((p: any) => ({ title: p.title, content: p.selftext || '' }));
             const analysis = await analyzeCreatorContent(creator.username, posts);
             
+            // Get top post links for this creator
+            const topPostLinks = creator.posts
+              .sort((a: any, b: any) => (b.score || 0) - (a.score || 0))
+              .slice(0, 3)
+              .map((p: any) => `https://reddit.com${p.permalink}`);
+            
             qualityCreators.push({
               username: creator.username,
               post_link: `https://reddit.com/u/${creator.username}`,
+              topPostLinks,
               upvotes: creator.totalScore,
               subreddit: subreddit,
               timestamp: Date.now() / 1000,
               title: `${creator.postCount} posts, ${Math.round(creator.totalScore/creator.postCount)} avg score - ${analysis.tags.slice(0, 3).join(', ')}`
             });
           } catch (analysisError) {
-            // Include creator without AI analysis
+            // Include creator without AI analysis but still capture top posts
+            const topPostLinks = creator.posts
+              .sort((a: any, b: any) => (b.score || 0) - (a.score || 0))
+              .slice(0, 3)
+              .map((p: any) => `https://reddit.com${p.permalink}`);
+              
             qualityCreators.push({
               username: creator.username,
               post_link: `https://reddit.com/u/${creator.username}`,
+              topPostLinks,
               upvotes: creator.totalScore,
               subreddit: subreddit,
               timestamp: Date.now() / 1000,
@@ -554,6 +567,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const existing = await storage.getCreatorByUsername(username);
           if (!existing) {
             const tags = data.categories.length > 0 ? data.categories : ["General"];
+            const creatorData = qualityCreators.find(c => c.username === username);
+            const topPostLinks = creatorData?.topPostLinks || [];
+            
             await storage.createCreator({
               username,
               platform: "Reddit",
@@ -562,6 +578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               engagementScore: Math.min(100, Math.max(20, Math.floor(data.karma / 5))),
               tags,
               profileLink: `https://reddit.com/u/${username}`,
+              topPostLinks,
               lastActive: new Date(),
               postsCount: data.posts,
             });
@@ -660,6 +677,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const existing = await storage.getCreatorByUsername(username);
         if (!existing) {
           const tags = data.categories.length > 0 ? data.categories : ["Data Science"];
+          
+          // Get top posts for this creator from the scraped data
+          const creatorPosts = redditPosts.filter(p => p.author === username);
+          const topPostLinks = creatorPosts
+            .sort((a, b) => (b.ups || 0) - (a.ups || 0))
+            .slice(0, 3)
+            .map(p => `https://reddit.com${p.permalink}`);
+          
           await storage.createCreator({
             username,
             platform: "Reddit",
@@ -668,6 +693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             engagementScore: Math.min(100, Math.max(20, Math.floor(data.karma / 5))),
             tags,
             profileLink: `https://reddit.com/u/${username}`,
+            topPostLinks,
             lastActive: new Date(),
             postsCount: data.posts,
             commentsCount: 0

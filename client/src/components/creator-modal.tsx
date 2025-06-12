@@ -147,6 +147,30 @@ export function CreatorModal({ creatorId, open, onOpenChange }: CreatorModalProp
               </div>
             )}
 
+            {/* Top Posts */}
+            {creator.topPostLinks && creator.topPostLinks.length > 0 && (
+              <div>
+                <h5 className="text-sm font-medium text-slate-700 mb-3 flex items-center">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Top Reddit Posts
+                </h5>
+                <div className="space-y-2">
+                  {creator.topPostLinks.map((link, index) => (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start text-left"
+                      onClick={() => window.open(link, '_blank')}
+                    >
+                      <ExternalLink className="w-3 h-3 mr-2" />
+                      <span className="truncate">Top Post #{index + 1}</span>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Recent Posts */}
             <div>
               <h5 className="text-sm font-medium text-slate-700 mb-3 flex items-center">
