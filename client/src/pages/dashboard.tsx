@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Users, TrendingUp, Radio, BarChart3, Search, RefreshCw, Download, Eye, ExternalLink } from "lucide-react";
+import { Users, TrendingUp, Radio, BarChart3, Search, RefreshCw, Download, Eye, ExternalLink, Workflow } from "lucide-react";
 import { SiReddit } from "react-icons/si";
+import { Link } from "wouter";
 import { CreatorModal } from "@/components/creator-modal";
 import { SubredditModal } from "@/components/subreddit-modal";
 import { SubredditSearch } from "@/components/subreddit-search";
@@ -204,6 +205,16 @@ export default function Dashboard() {
         <div className="flex-1 px-4 py-6">
           <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Actions</h3>
           <div className="space-y-3">
+            <Link href="/workflow">
+              <Button 
+                variant="default"
+                className="w-full justify-start bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                <Workflow className="w-4 h-4 mr-2" />
+                Workflow Builder
+              </Button>
+            </Link>
+
             <Button 
               onClick={() => exportMutation.mutate('csv')}
               disabled={exportMutation.isPending}
