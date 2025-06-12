@@ -7,9 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Settings, Play, Save, Database, Zap, Bot, ArrowLeft } from "lucide-react";
+import { Plus, Settings, Play, Save, Database, Zap, Bot, ArrowLeft, MessageSquare } from "lucide-react";
 import { SiGooglegemini, SiPostgresql, SiReddit } from "react-icons/si";
 import { Link } from "wouter";
+import { Chatbot } from "@/components/chatbot";
+import { useMutation } from "@tanstack/react-query";
 
 interface WorkflowNode {
   id: string;
@@ -320,32 +322,54 @@ function RedditNode({ node, onUpdate }: NodeComponentProps) {
 export default function WorkflowBuilder() {
   const [nodes, setNodes] = useState<WorkflowNode[]>([
     {
-      id: 'reddit-1',
-      type: 'reddit',
-      title: 'Reddit Scraper',
-      config: { subreddit: 'MachineLearning', limit: 100, sort: 'hot' },
+      id: 'database-1',
+      type: 'database',
+      title: 'Get Creators',
+      config: { queryType: 'creators', limit: 20 },
       position: { x: 100, y: 100 },
       connections: ['gemini-1']
     },
     {
       id: 'gemini-1',
       type: 'gemini',
-      title: 'Gemini Analysis',
+      title: 'Analyze Creators',
       config: { model: 'gemini-1.5-pro', temperature: 0.7, analysisType: 'creator' },
       position: { x: 500, y: 100 },
-      connections: ['database-1']
-    },
-    {
-      id: 'database-1',
-      type: 'database',
-      title: 'Store Results',
-      config: { queryType: 'creators', limit: 50 },
-      position: { x: 900, y: 100 },
       connections: []
     }
   ]);
 
   const [selectedWorkflow, setSelectedWorkflow] = useState('creator-analysis');
+  const [showChatbot, setShowChatbot] = useState(false);
+  const [executionResult, setExecutionResult] = useState<any>(null);
+
+  const executeMutation = useMutation({
+    mutationFn: async (workflowNodes: WorkflowNode[]) => {
+      const response = await fetch('/api/workflow/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodes: workflowNodes })
+      });
+      return response.json();
+    },
+    onSuccess: async (data) => {
+      // Poll for execution results
+      const pollExecution = async () => {
+        const response = await fetch(`/api/workflow/execution/${data.executionId}`);
+        const execution = await response.json();
+        
+        if (execution.status === 'completed') {
+          setExecutionResult(execution);
+        } else if (execution.status === 'failed') {
+          console.error('Workflow execution failed:', execution.results.error);
+        } else {
+          setTimeout(pollExecution, 1000);
+        }
+      };
+      
+      setTimeout(pollExecution, 1000);
+    }
+  });
 
   const updateNodeConfig = useCallback((nodeId: string, config: Record<string, any>) => {
     setNodes(prev => prev.map(node => 
@@ -367,7 +391,7 @@ export default function WorkflowBuilder() {
 
   const executeWorkflow = () => {
     console.log('Executing workflow with nodes:', nodes);
-    // Implementation would trigger the actual workflow execution
+    executeMutation.mutate(nodes);
   };
 
   const renderNode = (node: WorkflowNode) => {
@@ -422,9 +446,19 @@ export default function WorkflowBuilder() {
               <Save className="w-4 h-4 mr-2" />
               Save
             </Button>
-            <Button onClick={executeWorkflow}>
+            <Button 
+              onClick={executeWorkflow}
+              disabled={executeMutation.isPending}
+            >
               <Play className="w-4 h-4 mr-2" />
-              Run Workflow
+              {executeMutation.isPending ? 'Running...' : 'Run Workflow'}
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => setShowChatbot(!showChatbot)}
+            >
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Chat Assistant
             </Button>
           </div>
         </div>
@@ -489,12 +523,43 @@ export default function WorkflowBuilder() {
         </div>
 
         {/* Main Canvas */}
-        <div className="flex-1 bg-white rounded-lg border border-slate-200 relative overflow-auto min-h-[600px]">
-          <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
-            {/* Workflow Canvas */}
-            <div className="relative p-6">
-              <div className="flex flex-wrap gap-6">
-                {nodes.map(renderNode)}
+        <div className="flex-1 flex gap-4">
+          <div className="flex-1 bg-white rounded-lg border border-slate-200 relative overflow-auto min-h-[600px]">
+            <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
+              {/* Workflow Canvas */}
+              <div className="relative p-6">
+                <div className="flex flex-wrap gap-6">
+                  {nodes.map(renderNode)}
+                </div>
+                
+                {/* Execution Results */}
+                {executionResult && (
+                  <div className="absolute top-4 right-4 max-w-sm">
+                    <Card className="border-green-200 bg-green-50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-green-700">Workflow Complete</CardTitle>
+                      </CardHeader>
+                      <CardContent className="text-xs">
+                        <p>Status: {executionResult.status}</p>
+                        <p>Duration: {new Date(executionResult.endTime).getTime() - new Date(executionResult.startTime).getTime()}ms</p>
+                        <p>Results: {Object.keys(executionResult.results).length} nodes processed</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+                
+                {executeMutation.isPending && (
+                  <div className="absolute top-4 right-4 max-w-sm">
+                    <Card className="border-blue-200 bg-blue-50">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                          <span className="text-sm text-blue-700">Executing workflow...</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </div>
               
               {/* Connection Lines */}

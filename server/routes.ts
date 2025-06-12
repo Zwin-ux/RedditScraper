@@ -839,6 +839,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Workflow execution endpoints
+  app.post("/api/workflow/execute", async (req, res) => {
+    try {
+      const { nodes } = req.body;
+      const { workflowEngine } = await import("./workflow-engine");
+      
+      const executionId = await workflowEngine.executeWorkflow(nodes);
+      res.json({ executionId, status: 'started' });
+    } catch (error) {
+      console.error("Failed to execute workflow:", error);
+      res.status(500).json({ message: "Failed to execute workflow", error: error.message });
+    }
+  });
+
+  app.get("/api/workflow/execution/:id", async (req, res) => {
+    try {
+      const { workflowEngine } = await import("./workflow-engine");
+      const execution = workflowEngine.getExecution(req.params.id);
+      
+      if (!execution) {
+        return res.status(404).json({ message: "Execution not found" });
+      }
+      
+      res.json(execution);
+    } catch (error) {
+      console.error("Failed to get execution:", error);
+      res.status(500).json({ message: "Failed to get execution details" });
+    }
+  });
+
+  // Chat endpoint for analyzing creators
+  app.post("/api/chat", async (req, res) => {
+    try {
+      const { message, context } = req.body;
+      const { analyzeCreatorContent } = await import("./gemini");
+      
+      // Get relevant data based on the message
+      let responseData = "";
+      
+      if (message.toLowerCase().includes('creator') || message.toLowerCase().includes('user')) {
+        const creators = await storage.getCreators({ limit: 20 });
+        const creatorSummary = creators.map(c => 
+          `${c.username}: ${c.karma} karma, ${c.engagementScore} engagement, ${c.tags?.join(', ') || 'No tags'}`
+        ).join('\n');
+        
+        responseData = `Here are our top Reddit creators:\n${creatorSummary}`;
+      }
+      
+      if (message.toLowerCase().includes('post')) {
+        const creators = await storage.getCreators({ limit: 10 });
+        const allPosts = [];
+        
+        for (const creator of creators) {
+          const posts = await storage.getPostsByCreator(creator.id, 2);
+          allPosts.push(...posts.map(p => `${creator.username}: "${p.title}" (${p.upvotes} upvotes)`));
+        }
+        
+        responseData = `Recent Reddit posts:\n${allPosts.slice(0, 15).join('\n')}`;
+      }
+      
+      if (message.toLowerCase().includes('stat') || message.toLowerCase().includes('data')) {
+        const stats = await storage.getDashboardStats();
+        responseData = `Database Statistics:
+- Total Creators: ${stats.totalCreators}
+- High Engagement: ${stats.highEngagement}
+- Active Subreddits: ${stats.activeSubreddits}
+- Posts Analyzed: ${stats.postsAnalyzed}`;
+      }
+      
+      // Use Gemini to generate natural response
+      const analysis = await analyzeCreatorContent("assistant", [
+        { title: message, content: `User question: ${message}\n\nData context: ${responseData}` }
+      ]);
+      
+      res.json({
+        response: analysis.summary || "I can help you analyze our Reddit creators and posts. What would you like to know?",
+        data: responseData,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error("Chat error:", error);
+      res.status(500).json({ 
+        response: "I'm having trouble accessing the data right now. Please try again.",
+        error: error.message 
+      });
+    }
+  });
+
   // Get subreddits
   app.get("/api/subreddits", async (req, res) => {
     try {
