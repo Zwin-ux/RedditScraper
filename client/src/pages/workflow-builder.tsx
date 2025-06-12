@@ -602,6 +602,13 @@ export default function WorkflowBuilder() {
               </svg>
             </div>
           </div>
+          
+          {/* Chatbot Panel */}
+          {showChatbot && (
+            <div className="w-96">
+              <Chatbot />
+            </div>
+          )}
         </div>
       </div>
     </div>
