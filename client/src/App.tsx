@@ -12,6 +12,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/workflow" component={WorkflowBuilder} />
+      <Route path="/workflow-builder" component={WorkflowBuilder} />
       <Route component={NotFound} />
     </Switch>
   );

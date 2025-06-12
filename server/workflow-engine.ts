@@ -189,8 +189,8 @@ export class WorkflowEngine {
             try {
               const posts = await storage.getPostsByCreator(creator.id, 3);
               const analysis = await analyzeCreatorContent(
-                creator.username,
-                posts.map(p => ({ content: p.content || p.title, upvotes: p.upvotes }))
+                posts.map(p => ({ title: p.title, content: p.content || '' })),
+                posts.map(p => ({ content: p.content || p.title, upvotes: p.upvotes || 0 }))
               );
               results.push({ creator: creator.username, analysis });
             } catch (error) {

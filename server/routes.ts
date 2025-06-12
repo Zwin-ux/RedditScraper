@@ -849,7 +849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ executionId, status: 'started' });
     } catch (error) {
       console.error("Failed to execute workflow:", error);
-      res.status(500).json({ message: "Failed to execute workflow", error: error.message });
+      res.status(500).json({ message: "Failed to execute workflow", error: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -909,9 +909,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Use Gemini to generate natural response
-      const analysis = await analyzeCreatorContent("assistant", [
-        { title: message, content: `User question: ${message}\n\nData context: ${responseData}` }
-      ]);
+      const analysis = await analyzeCreatorContent(
+        [{ title: message, content: `User question: ${message}\n\nData context: ${responseData}` }],
+        []
+      );
       
       res.json({
         response: analysis.summary || "I can help you analyze our Reddit creators and posts. What would you like to know?",
@@ -923,7 +924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Chat error:", error);
       res.status(500).json({ 
         response: "I'm having trouble accessing the data right now. Please try again.",
-        error: error.message 
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   });
