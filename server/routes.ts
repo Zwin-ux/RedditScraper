@@ -869,7 +869,241 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Chat endpoint for analyzing creators
+  // Enhanced chat endpoint with comprehensive analysis
+  app.post("/api/chat/enhanced", async (req, res) => {
+    try {
+      const { message, context, includeFullAnalysis } = req.body;
+      const { analyzeCreatorContent, analyzeDataScienceTrends } = await import("./gemini");
+      
+      let responseData = "";
+      let analysis = null;
+      let insights: string[] = [];
+      let recommendations: string[] = [];
+
+      // Comprehensive data gathering based on message content
+      if (message.toLowerCase().includes('creator') || message.toLowerCase().includes('user') || message.toLowerCase().includes('who')) {
+        const creators = await storage.getCreators({ limit: 50 });
+        
+        // Get detailed creator analysis
+        const topCreators = creators.slice(0, 10);
+        const creatorDetails = [];
+        
+        for (const creator of topCreators) {
+          const posts = await storage.getPostsByCreator(creator.id, 5);
+          const totalUpvotes = posts.reduce((sum, p) => sum + (p.upvotes || 0), 0);
+          const avgUpvotes = posts.length > 0 ? Math.round(totalUpvotes / posts.length) : 0;
+          
+          creatorDetails.push({
+            username: creator.username,
+            karma: creator.karma,
+            engagement: creator.engagementScore,
+            tags: creator.tags?.join(', ') || 'General',
+            subreddit: creator.subreddit,
+            postsCount: posts.length,
+            avgUpvotes,
+            topPost: posts[0]?.title || 'No posts'
+          });
+        }
+        
+        responseData = creatorDetails.map(c => 
+          `${c.username} (${c.subreddit}): ${c.karma} karma, ${c.engagement}% engagement\n` +
+          `  • ${c.postsCount} posts, avg ${c.avgUpvotes} upvotes\n` +
+          `  • Tags: ${c.tags}\n` +
+          `  • Top post: "${c.topPost}"`
+        ).join('\n\n');
+
+        insights = [
+          `Found ${creators.length} total creators across ${new Set(creators.map(c => c.subreddit)).size} subreddits`,
+          `Average engagement score: ${Math.round(creators.reduce((sum, c) => sum + c.engagementScore, 0) / creators.length)}%`,
+          `Top subreddit: ${creators.reduce((acc, c) => {
+            acc[c.subreddit] = (acc[c.subreddit] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>).toString().split(',')[0]}`
+        ];
+
+        recommendations = [
+          "Focus on creators with 80+ engagement scores for partnerships",
+          "Monitor trending topics in top-performing subreddits",
+          "Analyze posting patterns of high-karma creators"
+        ];
+      }
+      
+      if (message.toLowerCase().includes('post') || message.toLowerCase().includes('content')) {
+        const creators = await storage.getCreators({ limit: 20 });
+        const allPosts = [];
+        
+        for (const creator of creators) {
+          const posts = await storage.getPostsByCreator(creator.id, 3);
+          allPosts.push(...posts.map(p => ({
+            ...p,
+            creator: creator.username,
+            subreddit: creator.subreddit
+          })));
+        }
+        
+        // Sort by upvotes and analyze patterns
+        allPosts.sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0));
+        const topPosts = allPosts.slice(0, 20);
+        
+        responseData = topPosts.map(p => 
+          `"${p.title}" by ${p.creator} (r/${p.subreddit})\n` +
+          `  • ${p.upvotes || 0} upvotes • ${p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'Unknown date'}`
+        ).join('\n\n');
+
+        // Analyze trends in top posts
+        if (includeFullAnalysis && topPosts.length > 0) {
+          const trendsAnalysis = await analyzeDataScienceTrends(
+            topPosts.map(p => ({ title: p.title, content: p.content || '' }))
+          );
+          
+          insights = [
+            `Analyzed ${allPosts.length} total posts`,
+            `Highest engagement: ${topPosts[0]?.upvotes || 0} upvotes`,
+            `Top skills mentioned: ${trendsAnalysis.topSkills?.slice(0, 3).join(', ') || 'Various'}`,
+            `Emerging technologies: ${trendsAnalysis.emergingTechnologies?.slice(0, 3).join(', ') || 'AI/ML'}`
+          ];
+
+          recommendations = [
+            "Create content around trending technologies",
+            "Study high-upvote post formats and timing",
+            "Focus on practical tutorials and case studies"
+          ];
+        }
+      }
+      
+      if (message.toLowerCase().includes('stat') || message.toLowerCase().includes('data') || message.toLowerCase().includes('analytic')) {
+        const stats = await storage.getDashboardStats();
+        const creators = await storage.getCreators({ limit: 100 });
+        
+        // Advanced statistics
+        const subredditStats = creators.reduce((acc, c) => {
+          acc[c.subreddit] = (acc[c.subreddit] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        const engagementDistribution = {
+          high: creators.filter(c => c.engagementScore >= 80).length,
+          medium: creators.filter(c => c.engagementScore >= 50 && c.engagementScore < 80).length,
+          low: creators.filter(c => c.engagementScore < 50).length
+        };
+
+        responseData = `Comprehensive Database Statistics:
+
+Core Metrics:
+• Total Creators: ${stats.totalCreators}
+• High Engagement (80%+): ${stats.highEngagement}
+• Active Subreddits: ${stats.activeSubreddits}
+• Posts Analyzed: ${stats.postsAnalyzed}
+
+Subreddit Distribution:
+${Object.entries(subredditStats)
+  .sort((a, b) => b[1] - a[1])
+  .map(([sub, count]) => `• r/${sub}: ${count} creators`)
+  .join('\n')}
+
+Engagement Breakdown:
+• High (80%+): ${engagementDistribution.high} creators
+• Medium (50-79%): ${engagementDistribution.medium} creators  
+• Low (<50%): ${engagementDistribution.low} creators
+
+Average Karma: ${Math.round(creators.reduce((sum, c) => sum + c.karma, 0) / creators.length)}`;
+
+        insights = [
+          `${((engagementDistribution.high / creators.length) * 100).toFixed(1)}% of creators have high engagement`,
+          `Most active subreddit: r/${Object.entries(subredditStats).sort((a, b) => b[1] - a[1])[0][0]}`,
+          `Database growth: ${stats.postsAnalyzed} posts from ${stats.totalCreators} creators`
+        ];
+
+        recommendations = [
+          "Target recruitment in high-engagement subreddits",
+          "Develop content strategy based on top-performing posts",
+          "Monitor creator activity patterns for optimal posting times"
+        ];
+      }
+
+      // Specific creator lookup
+      if (message.toLowerCase().includes('analyze') || message.match(/\bu\/\w+/)) {
+        const usernameMatch = message.match(/\bu\/(\w+)/) || message.match(/(\w+)/);
+        if (usernameMatch) {
+          const username = usernameMatch[1];
+          const creators = await storage.getCreators({ limit: 100 });
+          const creator = creators.find(c => c.username.toLowerCase().includes(username.toLowerCase()));
+          
+          if (creator) {
+            const posts = await storage.getPostsByCreator(creator.id, 10);
+            const totalUpvotes = posts.reduce((sum, p) => sum + (p.upvotes || 0), 0);
+            
+            responseData = `Deep Analysis of u/${creator.username}:
+
+Profile Overview:
+• Platform: ${creator.platform}
+• Primary Subreddit: r/${creator.subreddit}
+• Karma: ${creator.karma}
+• Engagement Score: ${creator.engagementScore}%
+• Tags: ${creator.tags?.join(', ') || 'General'}
+• Last Active: ${creator.lastActive ? new Date(creator.lastActive).toLocaleDateString() : 'Unknown'}
+
+Content Performance:
+• Total Posts: ${posts.length}
+• Total Upvotes: ${totalUpvotes}
+• Average Upvotes: ${posts.length > 0 ? Math.round(totalUpvotes / posts.length) : 0}
+• Top Post: "${posts[0]?.title || 'No posts'}" (${posts[0]?.upvotes || 0} upvotes)
+
+Recent Posts:
+${posts.slice(0, 5).map(p => 
+  `• "${p.title}" (${p.upvotes || 0} upvotes)`
+).join('\n')}`;
+
+            // AI analysis of creator's content
+            if (posts.length > 0) {
+              const creatorAnalysis = await analyzeCreatorContent(
+                posts.map(p => ({ title: p.title, content: p.content || '' })),
+                []
+              );
+              
+              insights = [
+                `Specializes in: ${creatorAnalysis.tags?.join(', ') || 'General topics'}`,
+                `Content confidence: ${creatorAnalysis.confidence}%`,
+                `Activity level: ${posts.length > 5 ? 'High' : posts.length > 2 ? 'Medium' : 'Low'}`,
+                `Engagement trend: ${creator.engagementScore > 70 ? 'Growing' : 'Stable'}`
+              ];
+
+              recommendations = [
+                `${creator.engagementScore > 80 ? 'Priority creator for partnerships' : 'Monitor for growth potential'}`,
+                `Content focus: ${creatorAnalysis.tags?.[0] || 'Diversified content'}`,
+                `Optimal posting: ${creator.subreddit} community engagement`
+              ];
+            }
+          }
+        }
+      }
+
+      // Generate AI response
+      const aiAnalysis = await analyzeCreatorContent(
+        [{ title: message, content: `User question: ${message}\n\nData context: ${responseData}` }],
+        []
+      );
+      
+      res.json({
+        response: aiAnalysis.summary || "I've analyzed your Reddit creator data. What specific insights would you like to explore further?",
+        data: responseData,
+        analysis: {
+          insights,
+          recommendations
+        },
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error("Enhanced chat error:", error);
+      res.status(500).json({ 
+        response: "I encountered an issue while analyzing your data. Please try rephrasing your question.",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Original chat endpoint (kept for backward compatibility)
   app.post("/api/chat", async (req, res) => {
     try {
       const { message, context } = req.body;
