@@ -1216,8 +1216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const subredditMatch = message.match(/r\/(\w+)|(\w+)\s*subreddit|about.*?(\w+)|tell.*about.*(machine\s*learning|data\s*science|artificial|python)/i);
       const mentionedSubreddits = ['machine learning', 'machinelearning', 'datascience', 'data science', 'artificial', 'python', 'chatgpt', 'openai'];
       const detectedSubreddit = subredditMatch ? 
-        (subredditMatch[1] || subredditMatch[2] || subredditMatch[3] || 
-         (subredditMatch[4] === 'machine learning' ? 'MachineLearning' : subredditMatch[4])) :
+        (subredditMatch[1] || subredditMatch[2] || subredditMatch[3] || subredditMatch[4]) :
         mentionedSubreddits.find(sub => message.toLowerCase().includes(sub));
 
       const isSubredditQuery = detectedSubreddit || 
@@ -1230,9 +1229,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let targetSubreddit = detectedSubreddit || 'MachineLearning';
         
         // Map common terms to actual subreddit names
-        if (targetSubreddit === 'machine learning') targetSubreddit = 'MachineLearning';
-        if (targetSubreddit === 'data science') targetSubreddit = 'datascience';
-        if (targetSubreddit === 'artificial') targetSubreddit = 'artificial';
+        const subredditMapping: Record<string, string> = {
+          'machine learning': 'MachineLearning',
+          'machinelearning': 'MachineLearning',
+          'data science': 'datascience',
+          'datascience': 'datascience',
+          'artificial': 'artificial',
+          'python': 'Python',
+          'chatgpt': 'ChatGPT',
+          'openai': 'OpenAI'
+        };
+        
+        targetSubreddit = subredditMapping[targetSubreddit.toLowerCase()] || targetSubreddit;
         
         try {
           console.log(`Performing Exa mini-search for r/${targetSubreddit}`);
