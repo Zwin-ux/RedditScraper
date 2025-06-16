@@ -832,46 +832,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { query, limit = 50 } = req.body;
       
-      console.log(`Analyzing r/datascience for: ${query || 'general content'}`);
+      console.log(`Searching r/datascience for: ${query || 'recent posts'}`);
       
-      // Get existing creators and filter for data science related content
-      const allCreators = await storage.getCreators({ limit: 100 });
-      const dataScienceCreators = allCreators.filter(creator => 
-        creator.subreddit === 'datascience' || 
-        creator.tags?.some(tag => 
-          tag.toLowerCase().includes('data') || 
-          tag.toLowerCase().includes('science') ||
-          tag.toLowerCase().includes('python') ||
-          tag.toLowerCase().includes('analytics')
-        )
-      );
-
-      // Generate synthetic posts data for demonstration
-      const posts = dataScienceCreators.slice(0, limit).map((creator, index) => ({
-        id: `post_${index}`,
-        title: `Data Science Discussion by ${creator.username}`,
-        author: creator.username,
-        subreddit: 'datascience',
-        ups: Math.floor(Math.random() * 500) + 50,
-        num_comments: Math.floor(Math.random() * 100) + 10,
-        created_utc: Date.now() / 1000 - Math.random() * 86400 * 30,
-        url: creator.profileLink,
-        selftext: `Analysis and insights about ${query || 'data science trends'}`
+      // Use the Reddit API client to get real posts
+      const searchResult = await redditApiClient.searchSubreddit('datascience', query, limit);
+      const posts = searchResult.posts.map(post => ({
+        id: post.id,
+        title: post.title,
+        author: post.author,
+        subreddit: post.subreddit,
+        ups: post.ups,
+        num_comments: post.num_comments,
+        created_utc: post.created_utc,
+        url: post.url,
+        permalink: `https://reddit.com${post.permalink}`,
+        selftext: post.selftext
       }));
 
-      // Generate AI trends analysis
-      const trends = {
-        topSkills: ['Python', 'Machine Learning', 'SQL', 'Data Visualization', 'Statistics'],
-        emergingTechnologies: ['LLMs', 'AutoML', 'MLOps', 'Edge AI', 'Synthetic Data'],
-        careerTrends: ['Remote Work', 'AI Ethics', 'Cross-functional Teams', 'Cloud Migration'],
-        industryInsights: [
-          'Increased demand for AI/ML specialists',
-          'Growing importance of data governance',
-          'Rise of no-code/low-code solutions',
-          'Focus on interpretable AI models'
-        ],
-        marketDemand: Math.floor(Math.random() * 30) + 70
-      };
+      // Analyze trends using Gemini AI
+      let trends;
+      try {
+        const { analyzeDataScienceTrends } = await import('./gemini');
+        trends = await analyzeDataScienceTrends(
+          posts.map(p => ({ title: p.title, content: p.selftext }))
+        );
+      } catch (aiError) {
+        console.log('AI analysis unavailable, using fallback trends');
+        trends = {
+          topSkills: ['Python', 'Machine Learning', 'SQL', 'Data Visualization', 'Statistics'],
+          emergingTechnologies: ['LLMs', 'AutoML', 'MLOps', 'Edge AI', 'Synthetic Data'],
+          careerTrends: ['Remote Work', 'AI Ethics', 'Cross-functional Teams', 'Cloud Migration'],
+          industryInsights: [
+            'Increased demand for AI/ML specialists',
+            'Growing importance of data governance',
+            'Rise of no-code/low-code solutions',
+            'Focus on interpretable AI models'
+          ],
+          marketDemand: 85
+        };
+      }
 
       res.json({
         success: true,
@@ -879,15 +878,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           postsFound: posts.length,
           posts: posts,
           trends: trends,
-          query: query || 'general'
+          query: query || 'recent posts'
         }
       });
 
     } catch (error) {
-      console.error("Failed to analyze r/datascience:", error);
+      console.error("Failed to search r/datascience:", error);
       res.status(500).json({ 
         success: false,
-        message: "Failed to analyze r/datascience",
+        message: "Failed to search r/datascience",
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
