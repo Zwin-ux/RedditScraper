@@ -892,41 +892,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-
-  // Real-time search endpoint for specific r/datascience content
-  app.post("/api/search-datascience", async (req, res) => {
-    try {
-      const { query, limit = 50 } = req.body;
-      
-      console.log(`Searching r/datascience for: ${query || 'general content'}`);
-      
-      const searchResult = await redditApiClient.searchSubreddit('datascience', query, limit);
-      const posts = searchResult.posts;
-      
-      // Analyze the found posts with Gemini
-      const trends = await analyzeDataScienceTrends(
-        posts.map(p => ({ title: p.title, content: p.selftext }))
-      );
-
-      res.json({
-        success: true,
-        results: {
-          postsFound: posts.length,
-          posts: posts.slice(0, 20), // Return top 20 for display
-          trends,
-          query: query || 'general'
-        }
-      });
-
-    } catch (error) {
-      console.error("Failed to search r/datascience:", error);
-      res.status(500).json({ 
-        success: false,
-        message: "Failed to search r/datascience",
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  });
   
   // Dashboard stats endpoint
   app.get("/api/dashboard/stats", async (req, res) => {
