@@ -122,7 +122,7 @@ export function GlobalChatbot({ isOpen, onToggle }: GlobalChatbotProps) {
     return (
       <Button
         onClick={onToggle}
-        className="fixed bottom-6 right-6 h-12 w-12 rounded-full shadow-lg z-50"
+        className="fixed bottom-4 right-4 h-12 w-12 rounded-full shadow-lg z-50 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
         size="icon"
       >
         <MessageSquare className="w-6 h-6" />
@@ -140,9 +140,11 @@ export function GlobalChatbot({ isOpen, onToggle }: GlobalChatbotProps) {
   ];
 
   return (
-    <Card className={`fixed bottom-6 right-6 shadow-2xl z-50 transition-all duration-300 ${
-      isMinimized ? 'w-80 h-16' : 'w-96 h-[600px]'
-    } flex flex-col`}>
+    <Card className={`fixed shadow-2xl z-50 transition-all duration-300 flex flex-col ${
+      isMinimized 
+        ? 'bottom-4 right-4 w-80 h-16 sm:w-80' 
+        : 'bottom-4 right-4 w-96 max-w-[calc(100vw-2rem)] h-[min(600px,calc(100vh-8rem))] sm:w-96 sm:max-w-none'
+    } max-h-[calc(100vh-2rem)]`}>
       <CardHeader className="pb-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-t-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -176,28 +178,28 @@ export function GlobalChatbot({ isOpen, onToggle }: GlobalChatbotProps) {
       {!isMinimized && (
         <CardContent className="flex-1 flex flex-col p-0">
           {/* Messages */}
-          <ScrollArea className="flex-1 p-4">
-            <div className="space-y-4">
+          <ScrollArea className="flex-1 px-4 py-3 overflow-y-auto">
+            <div className="space-y-3">
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex gap-2 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {message.type === 'bot' && (
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                      <Bot className="w-4 h-4 text-white" />
+                    <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                      <Bot className="w-3 h-3 text-white" />
                     </div>
                   )}
                   
-                  <div className={`max-w-[80%] ${message.type === 'user' ? 'order-1' : ''}`}>
+                  <div className={`max-w-[85%] ${message.type === 'user' ? 'order-1' : ''}`}>
                     <div
-                      className={`p-3 rounded-lg ${
+                      className={`p-3 rounded-lg text-sm ${
                         message.type === 'user'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-50 text-slate-900 border'
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                          : 'bg-slate-50 text-slate-900 border border-slate-200'
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
                     </div>
                     
                     {message.data && (
@@ -276,15 +278,15 @@ export function GlobalChatbot({ isOpen, onToggle }: GlobalChatbotProps) {
 
           {/* Quick Questions */}
           {messages.length === 1 && (
-            <div className="p-4 border-t border-slate-200 bg-slate-50">
-              <p className="text-sm text-slate-600 mb-3 font-medium">Try asking:</p>
-              <div className="grid grid-cols-1 gap-2">
-                {quickQuestions.map((question, index) => (
+            <div className="px-4 py-3 border-t border-slate-200 bg-gradient-to-r from-blue-50 to-purple-50 flex-shrink-0">
+              <p className="text-sm text-slate-700 mb-2 font-medium">Quick actions:</p>
+              <div className="grid grid-cols-1 gap-1.5">
+                {quickQuestions.slice(0, 4).map((question, index) => (
                   <Button
                     key={index}
                     variant="outline"
                     size="sm"
-                    className="text-xs justify-start h-8 text-left"
+                    className="text-xs justify-start h-7 text-left bg-white/50 hover:bg-white border-slate-200"
                     onClick={() => setInput(question)}
                   >
                     {question}
@@ -295,7 +297,7 @@ export function GlobalChatbot({ isOpen, onToggle }: GlobalChatbotProps) {
           )}
 
           {/* Input */}
-          <div className="p-4 border-t border-slate-200 bg-white">
+          <div className="p-3 border-t border-slate-200 bg-white rounded-b-lg flex-shrink-0">
             <div className="flex gap-2">
               <Input
                 value={input}
@@ -303,7 +305,7 @@ export function GlobalChatbot({ isOpen, onToggle }: GlobalChatbotProps) {
                 onKeyPress={handleKeyPress}
                 placeholder="Ask about creators, posts, trends..."
                 disabled={chatMutation.isPending}
-                className="flex-1 text-sm"
+                className="flex-1 text-sm h-9"
               />
               <Button
                 onClick={handleSend}
