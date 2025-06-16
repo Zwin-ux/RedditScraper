@@ -224,6 +224,37 @@ export function SubredditSearch({ isOpen, onClose }: SubredditSearchProps) {
     }
   };
 
+  const enhancedSearchMutation = useMutation({
+    mutationFn: (domain: string) => fetch('/api/enhanced-reddit-search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ domain })
+    }).then(res => res.json()),
+    onSuccess: (data) => {
+      toast({
+        title: "Enhanced Search Complete",
+        description: `Found ${data.data?.creatorsFound || 0} high-quality creators in ${data.data?.domain} domain`,
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/creators'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/subreddits'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Enhanced Search Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEnhancedSearch = (domain: string) => {
+    enhancedSearchMutation.mutate(domain);
+  };
+
   const getValidationIcon = () => {
     switch (validationState) {
       case 'valid':
@@ -362,6 +393,43 @@ export function SubredditSearch({ isOpen, onClose }: SubredditSearchProps) {
           </TabsContent>
 
           <TabsContent value="popular" className="space-y-4">
+            {/* Enhanced Discovery Section */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200 mb-4">
+              <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                <Star className="w-4 h-4 text-yellow-500" />
+                Advanced Creator Discovery
+              </h3>
+              <p className="text-sm text-slate-600 mb-3">
+                Use our enhanced Reddit agent to find high-quality creators using advanced scoring algorithms
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <Button 
+                  onClick={() => handleEnhancedSearch('ai-research')}
+                  disabled={scrapeMutation.isPending || bulkScrapeMutation.isPending}
+                  variant="outline"
+                  size="sm"
+                >
+                  AI Research
+                </Button>
+                <Button 
+                  onClick={() => handleEnhancedSearch('ai-tools')}
+                  disabled={scrapeMutation.isPending || bulkScrapeMutation.isPending}
+                  variant="outline"
+                  size="sm"
+                >
+                  AI Tools & Apps
+                </Button>
+                <Button 
+                  onClick={() => handleEnhancedSearch('data-science')}
+                  disabled={scrapeMutation.isPending || bulkScrapeMutation.isPending}
+                  variant="outline"
+                  size="sm"
+                >
+                  Data Science
+                </Button>
+              </div>
+            </div>
+
             {/* Popular Communities Grid */}
             <div className="overflow-y-auto max-h-[60vh]">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -7,6 +7,7 @@ import { RedditScraperV2, ScrapingOptions } from "./reddit-scraper-v2";
 import { scrapeSubredditCreators, enhanceCreatorsWithAI } from "./simple-reddit-scraper";
 import { addFixedRedditEndpoint } from "./fixed-reddit-endpoint";
 import { analyzeDataScienceTrends, analyzePostRelevance, analyzeCreatorContent } from "./gemini";
+import { enhancedRedditAgent, AI_RESEARCH_CONFIG, AI_TOOLS_CONFIG, DATA_SCIENCE_CONFIG } from "./enhanced-reddit-agent";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -725,6 +726,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Enhanced Reddit Agent endpoint for comprehensive creator discovery
+  app.post("/api/enhanced-reddit-search", async (req, res) => {
+    try {
+      const { domain = 'ai-tools', customConfig } = req.body;
+      
+      let config;
+      switch (domain) {
+        case 'ai-research':
+          config = AI_RESEARCH_CONFIG;
+          break;
+        case 'data-science':
+          config = DATA_SCIENCE_CONFIG;
+          break;
+        default:
+          config = AI_TOOLS_CONFIG;
+      }
+
+      // Allow custom configuration override
+      if (customConfig) {
+        config = { ...config, ...customConfig };
+      }
+
+      console.log(`Starting enhanced Reddit search for ${domain} domain...`);
+      
+      const creators = await enhancedRedditAgent.searchSubredditCreators(config);
+      const stored = await enhancedRedditAgent.storeCreators(creators, config.subreddits[0]);
+
+      res.json({
+        success: true,
+        data: {
+          domain,
+          creatorsFound: creators.length,
+          creatorsStored: stored,
+          topCreators: creators.slice(0, 10).map(c => ({
+            username: c.username,
+            score: c.score,
+            totalKarma: c.totalKarma,
+            specializations: c.specializations,
+            activityLevel: c.activityLevel,
+            profileUrl: c.profileUrl
+          })),
+          searchedSubreddits: config.subreddits,
+          searchedKeywords: config.keywords
+        },
+        message: `Enhanced search completed: found ${creators.length} creators, stored ${stored} new profiles`
+      });
+
+    } catch (error) {
+      console.error("Enhanced Reddit search failed:", error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: "Enhanced Reddit search failed. Please check your Reddit API credentials."
       });
     }
   });

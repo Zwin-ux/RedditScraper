@@ -1,0 +1,137 @@
+Great — here's a **focused breakdown to build the Reddit Creator Agent module** inside your larger *Master Creator Agent* system. This version is optimized for Replit with modularity, secret handling, and team extension in mind.
+
+---
+
+## 🧱 Folder: `/agents/reddit/`
+
+### 🧾 File: `reddit_agent.py`
+
+**Purpose**: Fetch top AI-related Reddit users and score them based on karma, activity, and comment engagement.
+Works as a modular plug-in to the Master Creator Agent system.
+
+---
+
+### ✅ Dependencies
+
+```bash
+pip install praw
+pip install pandas
+pip install python-dotenv
+```
+
+---
+
+### 📦 Directory Structure
+
+```
+/master-creator-agent
+├── agents/
+│   └── reddit/
+│       └── reddit_agent.py
+├── .env
+```
+
+---
+
+### 🔐 .env (in Replit Secrets or your local `.env`)
+
+```env
+REDDIT_CLIENT_ID=your_id
+REDDIT_CLIENT_SECRET=your_secret
+REDDIT_USER_AGENT=master-creator-agent/0.1 by u/your_reddit_username
+```
+
+---
+
+### 🧠 reddit\_agent.py
+
+```python
+import os
+import praw
+import pandas as pd
+from dotenv import load_dotenv
+
+load_dotenv()
+
+reddit = praw.Reddit(
+    client_id=os.getenv("REDDIT_CLIENT_ID"),
+    client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
+    user_agent=os.getenv("REDDIT_USER_AGENT")
+)
+
+def fetch_creators_from_subreddits(subreddits, keyword="AI", limit=50):
+    seen_users = set()
+    creators = []
+
+    for subreddit in subreddits:
+        for submission in reddit.subreddit(subreddit).search(keyword, limit=limit):
+            if submission.author and submission.author.name not in seen_users:
+                seen_users.add(submission.author.name)
+                try:
+                    redditor = reddit.redditor(submission.author.name)
+                    creators.append({
+                        "name": redditor.name,
+                        "karma": redditor.link_karma + redditor.comment_karma,
+                        "link_karma": redditor.link_karma,
+                        "comment_karma": redditor.comment_karma,
+                        "created_utc": redditor.created_utc,
+                        "profile": f"https://www.reddit.com/user/{redditor.name}"
+                    })
+                except:
+                    continue
+    return pd.DataFrame(creators)
+
+def score_creators(df):
+    if df.empty:
+        return df
+    df["score"] = df["karma"] * 0.7 + df["comment_karma"] * 0.3
+    df = df.sort_values(by="score", ascending=False)
+    return df
+
+if __name__ == "__main__":
+    subreddits = ["ChatGPT", "ArtificialIntelligence", "MachineLearning", "Singularity"]
+    raw_creators = fetch_creators_from_subreddits(subreddits)
+    scored_creators = score_creators(raw_creators)
+    print(scored_creators.head(10))
+    scored_creators.to_csv("reddit_creators.csv", index=False)
+```
+
+---
+
+### 🧠 Logic Recap:
+
+* Pulls Reddit users from relevant subreddits mentioning "AI"
+* Deduplicates by username
+* Scores creators by weighted karma
+* Outputs a CSV + preview in terminal
+
+---
+
+### 🧩 Next Extensions (Optional Now)
+
+* Add GPT tagging to classify niche (AI art, prompt engineering, etc.)
+* Connect to a central database (Supabase)
+* Modular schedule (via n8n or `schedule` in Python)
+* Export to shared Google Sheet or Airtable
+
+---
+
+### 🔁 Reuse Pattern
+
+In `/main.py` or a scheduler:
+
+```python
+from agents.reddit.reddit_agent import fetch_creators_from_subreddits, score_creators
+
+df = fetch_creators_from_subreddits(["ChatGPT", "ArtificialIntelligence"])
+scored = score_creators(df)
+# Send to aggregator/export module
+```
+
+---
+
+Let me know if you want:
+
+* Tagger integration (GPT classifying users into niches)
+* A version for Flowise
+* GitHub agent built the same way next
