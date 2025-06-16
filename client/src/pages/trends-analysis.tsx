@@ -1,465 +1,337 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TrendingUp, BarChart3, Brain, Calendar, Target, Loader2, RefreshCw } from "lucide-react";
-import { SiReddit } from "react-icons/si";
-import { Link } from "wouter";
-import { api } from "@/lib/api";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { Loader2, TrendingUp, Search, BarChart3, Target } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { apiRequest } from "@/lib/queryClient";
+
+interface TrendAnalysisResult {
+  success: boolean;
+  creators: Array<{
+    username: string;
+    totalKarma: number;
+    linkKarma: number;
+    commentKarma: number;
+    accountAge: number;
+    profileUrl: string;
+    score: number;
+    engagementRatio: number;
+    activityLevel: 'high' | 'medium' | 'low';
+    specializations: string[];
+    recentPostsCount: number;
+    averageUpvotes: number;
+  }>;
+  totalFound: number;
+  domain: string;
+  searchedSubreddits: string[];
+  searchedKeywords: string[];
+  message: string;
+}
 
 export default function TrendsAnalysis() {
-  const [subredditInput, setSubredditInput] = useState('');
-  const [analysisResults, setAnalysisResults] = useState<any>(null);
-  const { toast } = useToast();
+  const [selectedDomain, setSelectedDomain] = useState("ai-tools");
+  const [analysisResult, setAnalysisResult] = useState<TrendAnalysisResult | null>(null);
 
-  // Get dashboard stats for baseline
-  const { data: stats } = useQuery({
-    queryKey: ['/api/dashboard/stats'],
-    queryFn: api.getDashboardStats,
-  });
-
-  // Get creators for trend analysis
-  const { data: creators = [] } = useQuery({
-    queryKey: ['/api/creators'],
-    queryFn: () => api.getCreators({}),
-  });
-
-  // Analyze subreddit mutation
-  const analyzeMutation = useMutation({
-    mutationFn: (subreddit: string) => apiRequest('/api/analyze-subreddit', 'POST', { subreddit }),
+  const analyzeEnhancedTrends = useMutation({
+    mutationFn: async (data: { domain: string }) => {
+      return await apiRequest("/api/enhanced-reddit-search", "POST", data);
+    },
     onSuccess: (data) => {
-      setAnalysisResults(data);
-      toast({
-        title: "Analysis Complete",
-        description: `Analyzed r/${subredditInput} with AI insights`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Analysis Failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      if (data.success) {
+        setAnalysisResult(data);
+      }
     },
   });
 
-  const handleAnalyze = () => {
-    const subreddit = subredditInput.replace(/^r\//, '').trim();
-    if (subreddit) {
-      analyzeMutation.mutate(subreddit);
+  const handleAnalyze = (domain: string) => {
+    setSelectedDomain(domain);
+    analyzeEnhancedTrends.mutate({ domain });
+  };
+
+  const getDomainDescription = (domain: string) => {
+    switch (domain) {
+      case 'ai-research':
+        return 'Machine learning researchers, paper authors, and academic contributors';
+      case 'data-science':
+        return 'Data scientists, analysts, and visualization experts';
+      default:
+        return 'AI tool creators, API developers, and ChatGPT enthusiasts';
     }
   };
 
-  // Calculate trending metrics from existing data
-  const trendingMetrics = {
-    topTags: Object.entries(
-      creators.reduce((acc, c) => {
-        c.tags?.forEach(tag => {
-          acc[tag] = (acc[tag] || 0) + 1;
-        });
-        return acc;
-      }, {} as Record<string, number>)
-    ).sort(([,a], [,b]) => b - a).slice(0, 10),
-    
-    subredditGrowth: Object.entries(
-      creators.reduce((acc, c) => {
-        acc[c.subreddit] = (acc[c.subreddit] || 0) + c.engagementScore;
-        return acc;
-      }, {} as Record<string, number>)
-    ).sort(([,a], [,b]) => b - a).slice(0, 8),
-    
-    engagementTrends: creators.length > 0 ? {
-      avgScore: Math.round(creators.reduce((sum, c) => sum + c.engagementScore, 0) / creators.length),
-      highPerformers: creators.filter(c => c.engagementScore >= 80).length,
-      risingStars: creators.filter(c => c.engagementScore >= 70 && c.engagementScore < 80).length,
-      totalKarma: creators.reduce((sum, c) => sum + c.karma, 0)
-    } : { avgScore: 0, highPerformers: 0, risingStars: 0, totalKarma: 0 }
+  const getDomainColor = (domain: string) => {
+    switch (domain) {
+      case 'ai-research':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'data-science':
+        return 'bg-green-100 text-green-800 border-green-200';
+      default:
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+    }
+  };
+
+  const getActivityLevelColor = (level: string) => {
+    switch (level) {
+      case 'high':
+        return 'text-green-600';
+      case 'medium':
+        return 'text-yellow-600';
+      default:
+        return 'text-gray-600';
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-slate-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link href="/">
-              <Button variant="ghost" size="sm">← Dashboard</Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                <TrendingUp className="text-green-600" />
-                Trends Analysis
-              </h1>
-              <p className="text-slate-600">Community trends and AI-powered insights</p>
-            </div>
-          </div>
-          <Button
-            onClick={() => {
-              queryClient.invalidateQueries();
-              toast({ title: "Data refreshed successfully" });
-            }}
-            variant="outline"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
-      </header>
-
-      <div className="p-6">
-        {/* Quick Analysis Tool */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Brain className="w-5 h-5" />
-              AI Subreddit Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4">
-              <Input
-                placeholder="Enter subreddit name (e.g., MachineLearning, datascience, artificial)"
-                value={subredditInput}
-                onChange={(e) => setSubredditInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleAnalyze}
-                disabled={analyzeMutation.isPending || !subredditInput.trim()}
-                className="min-w-[120px]"
-              >
-                {analyzeMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Analyzing
-                  </>
-                ) : (
-                  <>
-                    <Target className="w-4 h-4 mr-2" />
-                    Analyze
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="tags">Tag Trends</TabsTrigger>
-            <TabsTrigger value="communities">Communities</TabsTrigger>
-            <TabsTrigger value="insights">AI Insights</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-slate-600 text-sm font-medium">Avg Engagement</div>
-                      <div className="text-3xl font-bold text-slate-900 mt-1">
-                        {trendingMetrics.engagementTrends.avgScore}
-                      </div>
-                    </div>
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <TrendingUp className="text-green-600 w-6 h-6" />
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center text-sm">
-                    <span className="text-green-600 font-medium">↗ Trending</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-slate-600 text-sm font-medium">High Performers</div>
-                      <div className="text-3xl font-bold text-slate-900 mt-1">
-                        {trendingMetrics.engagementTrends.highPerformers}
-                      </div>
-                    </div>
-                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <BarChart3 className="text-purple-600 w-6 h-6" />
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center text-sm">
-                    <span className="text-purple-600 font-medium">Active creators</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-slate-600 text-sm font-medium">Rising Stars</div>
-                      <div className="text-3xl font-bold text-slate-900 mt-1">
-                        {trendingMetrics.engagementTrends.risingStars}
-                      </div>
-                    </div>
-                    <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                      <TrendingUp className="text-yellow-600 w-6 h-6" />
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center text-sm">
-                    <span className="text-yellow-600 font-medium">Emerging talent</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-slate-600 text-sm font-medium">Total Karma</div>
-                      <div className="text-3xl font-bold text-slate-900 mt-1">
-                        {(trendingMetrics.engagementTrends.totalKarma / 1000000).toFixed(1)}M
-                      </div>
-                    </div>
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <SiReddit className="text-blue-600 w-6 h-6" />
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center text-sm">
-                    <span className="text-blue-600 font-medium">Community reach</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Recent Analysis Results */}
-            {analysisResults && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Latest Analysis: r/{analysisResults.data?.subreddit || 'Unknown'}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-blue-50 rounded-lg p-4">
-                      <h4 className="font-semibold text-blue-900 mb-2">Posts Analyzed</h4>
-                      <div className="text-2xl font-bold text-blue-800">
-                        {analysisResults.data?.postsAnalyzed || 0}
-                      </div>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-4">
-                      <h4 className="font-semibold text-green-900 mb-2">Creators Found</h4>
-                      <div className="text-2xl font-bold text-green-800">
-                        {analysisResults.data?.creatorsFound || 0}
-                      </div>
-                    </div>
-                    <div className="bg-purple-50 rounded-lg p-4">
-                      <h4 className="font-semibold text-purple-900 mb-2">AI Categories</h4>
-                      <div className="text-2xl font-bold text-purple-800">
-                        {analysisResults.data?.categories?.length || 0}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {analysisResults.data?.topCreators && (
-                    <div className="mt-6">
-                      <h4 className="font-semibold text-slate-900 mb-3">Top Creators from Analysis</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {analysisResults.data.topCreators.slice(0, 6).map((creator: any, index: number) => (
-                          <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                            <div>
-                              <div className="font-medium">u/{creator.username}</div>
-                              <div className="text-sm text-slate-500">{creator.posts} posts • {creator.karma} karma</div>
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              {creator.specialties?.slice(0, 2).map((spec: string, i: number) => (
-                                <Badge key={i} variant="secondary" className="text-xs">
-                                  {spec}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="tags" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Trending Tags & Specializations</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="font-semibold text-slate-900 mb-4">Most Popular Tags</h4>
-                    <div className="space-y-3">
-                      {trendingMetrics.topTags.map(([tag, count], index) => (
-                        <div key={tag} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-purple-500 rounded text-white text-xs flex items-center justify-center font-bold">
-                              {index + 1}
-                            </div>
-                            <Badge variant="secondary">{tag}</Badge>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Progress value={(count / creators.length) * 100} className="w-20" />
-                            <span className="text-sm font-medium w-8">{count}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-slate-900 mb-4">Tag Distribution</h4>
-                    <div className="space-y-4">
-                      {[
-                        { category: 'AI/ML', tags: trendingMetrics.topTags.filter(([tag]) => tag.toLowerCase().includes('ai') || tag.toLowerCase().includes('ml') || tag.toLowerCase().includes('machine')).length },
-                        { category: 'Programming', tags: trendingMetrics.topTags.filter(([tag]) => tag.toLowerCase().includes('python') || tag.toLowerCase().includes('code') || tag.toLowerCase().includes('dev')).length },
-                        { category: 'Data Science', tags: trendingMetrics.topTags.filter(([tag]) => tag.toLowerCase().includes('data') || tag.toLowerCase().includes('analytics')).length },
-                        { category: 'Research', tags: trendingMetrics.topTags.filter(([tag]) => tag.toLowerCase().includes('research') || tag.toLowerCase().includes('academic')).length }
-                      ].map((item, index) => (
-                        <div key={index} className="flex items-center justify-between">
-                          <span className="font-medium">{item.category}</span>
-                          <div className="flex items-center gap-2">
-                            <Progress value={(item.tags / trendingMetrics.topTags.length) * 100} className="w-20" />
-                            <span className="text-sm font-medium">{item.tags}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="communities" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Community Performance Analysis</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Subreddit</TableHead>
-                      <TableHead>Total Engagement</TableHead>
-                      <TableHead>Creator Count</TableHead>
-                      <TableHead>Avg Score</TableHead>
-                      <TableHead>Trend</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {trendingMetrics.subredditGrowth.map(([subreddit, totalEngagement], index) => {
-                      const creatorCount = creators.filter(c => c.subreddit === subreddit).length;
-                      const avgScore = creatorCount > 0 ? Math.round(totalEngagement / creatorCount) : 0;
-                      return (
-                        <TableRow key={subreddit}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <SiReddit className="w-4 h-4 text-orange-500" />
-                              <span className="font-medium">r/{subreddit}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{Math.round(totalEngagement).toLocaleString()}</div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{creatorCount}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Progress value={avgScore} className="w-16" />
-                              <span className="text-sm font-medium">{avgScore}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={index < 3 ? "default" : "secondary"} className="text-xs">
-                              {index < 3 ? "Hot" : "Stable"}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="insights" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Brain className="w-5 h-5" />
-                  AI-Powered Trend Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose max-w-none">
-                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
-                    <h4 className="font-semibold text-slate-900 mb-4">Current Trend Analysis</h4>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <h5 className="font-medium text-slate-800 mb-2">Key Findings:</h5>
-                        <ul className="text-sm text-slate-700 space-y-1">
-                          <li>• {trendingMetrics.topTags[0]?.[0] || 'AI General'} is the most dominant specialization</li>
-                          <li>• {Math.round((trendingMetrics.engagementTrends.highPerformers / creators.length) * 100)}% of creators maintain high engagement</li>
-                          <li>• Top performing community: r/{trendingMetrics.subredditGrowth[0]?.[0] || 'Unknown'}</li>
-                          <li>• {trendingMetrics.engagementTrends.risingStars} emerging creators showing potential</li>
-                        </ul>
-                      </div>
-                      
-                      <div>
-                        <h5 className="font-medium text-slate-800 mb-2">Strategic Recommendations:</h5>
-                        <ul className="text-sm text-slate-700 space-y-1">
-                          <li>• Focus on {trendingMetrics.topTags.slice(0, 3).map(([tag]) => tag).join(', ')} specializations</li>
-                          <li>• Engage with communities showing consistent growth</li>
-                          <li>• Monitor rising stars for partnership opportunities</li>
-                          <li>• Leverage AI analysis for deeper insights</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-6 space-y-4">
-                    <div>
-                      <h4 className="font-semibold text-slate-900">Market Insights:</h4>
-                      <p className="text-slate-700">
-                        The Reddit AI community shows strong engagement patterns with {creators.length} active creators 
-                        maintaining an average engagement score of {trendingMetrics.engagementTrends.avgScore}. 
-                        Communities like r/{trendingMetrics.subredditGrowth[0]?.[0]} lead in terms of creator quality and engagement.
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-semibold text-slate-900">Future Opportunities:</h4>
-                      <p className="text-slate-700">
-                        With {trendingMetrics.engagementTrends.risingStars} rising creators and emerging specializations 
-                        in {trendingMetrics.topTags.slice(0, 2).map(([tag]) => tag).join(' and ')}, 
-                        there are significant opportunities for strategic partnerships and community building.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex flex-col space-y-4">
+        <h1 className="text-3xl font-bold">Trends Analysis</h1>
+        <p className="text-muted-foreground">
+          Discover trending creators and emerging patterns across different AI and data science domains
+        </p>
       </div>
+
+      {/* Domain Selection */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Select Analysis Domain
+          </CardTitle>
+          <CardDescription>
+            Choose a domain to analyze trending creators and emerging patterns
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Button
+              variant={selectedDomain === 'ai-tools' ? 'default' : 'outline'}
+              onClick={() => handleAnalyze('ai-tools')}
+              disabled={analyzeEnhancedTrends.isPending}
+              className="h-auto p-4 flex flex-col items-start space-y-2"
+            >
+              <div className="font-medium">AI Tools & APIs</div>
+              <div className="text-sm text-left opacity-80">
+                ChatGPT, LocalLLaMA, OpenAI, and tool creators
+              </div>
+            </Button>
+
+            <Button
+              variant={selectedDomain === 'ai-research' ? 'default' : 'outline'}
+              onClick={() => handleAnalyze('ai-research')}
+              disabled={analyzeEnhancedTrends.isPending}
+              className="h-auto p-4 flex flex-col items-start space-y-2"
+            >
+              <div className="font-medium">AI Research</div>
+              <div className="text-sm text-left opacity-80">
+                Machine learning, deep learning, and academic research
+              </div>
+            </Button>
+
+            <Button
+              variant={selectedDomain === 'data-science' ? 'default' : 'outline'}
+              onClick={() => handleAnalyze('data-science')}
+              disabled={analyzeEnhancedTrends.isPending}
+              className="h-auto p-4 flex flex-col items-start space-y-2"
+            >
+              <div className="font-medium">Data Science</div>
+              <div className="text-sm text-left opacity-80">
+                Analytics, statistics, and data visualization
+              </div>
+            </Button>
+          </div>
+
+          {analyzeEnhancedTrends.isPending && (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>Analyzing {selectedDomain} trends...</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Error Handling */}
+      {analyzeEnhancedTrends.error && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Trends analysis failed. Please try again or check your connection.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Results Section */}
+      {analysisResult && (
+        <div className="space-y-6">
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{analysisResult.totalFound}</p>
+                  <p className="text-sm text-muted-foreground">Creators Found</p>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{analysisResult.searchedSubreddits.length}</p>
+                  <p className="text-sm text-muted-foreground">Subreddits Analyzed</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">
+                    {analysisResult.creators.filter(c => c.activityLevel === 'high').length}
+                  </p>
+                  <p className="text-sm text-muted-foreground">High Activity</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <div className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getDomainColor(analysisResult.domain)}`}>
+                    {analysisResult.domain}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">Domain Focus</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Domain Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle>{analysisResult.domain.charAt(0).toUpperCase() + analysisResult.domain.slice(1)} Domain Analysis</CardTitle>
+              <CardDescription>
+                {getDomainDescription(analysisResult.domain)}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h4 className="font-medium mb-2">Analyzed Subreddits:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {analysisResult.searchedSubreddits.map((subreddit, index) => (
+                    <Badge key={index} variant="outline">
+                      r/{subreddit}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="font-medium mb-2">Search Keywords:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {analysisResult.searchedKeywords.map((keyword, index) => (
+                    <Badge key={index} variant="secondary">
+                      {keyword}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Top Creators */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Top Trending Creators
+              </CardTitle>
+              <CardDescription>
+                Leading creators in the {analysisResult.domain} domain, ranked by engagement and activity
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {analysisResult.creators.slice(0, 15).map((creator, index) => (
+                  <div key={creator.username} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-muted-foreground">#{index + 1}</span>
+                          <h3 className="font-medium">u/{creator.username}</h3>
+                          <Badge 
+                            variant={creator.activityLevel === 'high' ? 'default' : 
+                                   creator.activityLevel === 'medium' ? 'secondary' : 'outline'}
+                            className="text-xs"
+                          >
+                            {creator.activityLevel} activity
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {creator.totalKarma.toLocaleString()} total karma • {creator.accountAge} days old
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold">{creator.score}</div>
+                        <div className="text-xs text-muted-foreground">engagement score</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <div className="font-medium">{creator.linkKarma.toLocaleString()}</div>
+                        <div className="text-muted-foreground">Link Karma</div>
+                      </div>
+                      <div>
+                        <div className="font-medium">{creator.commentKarma.toLocaleString()}</div>
+                        <div className="text-muted-foreground">Comment Karma</div>
+                      </div>
+                      <div>
+                        <div className="font-medium">{creator.recentPostsCount}</div>
+                        <div className="text-muted-foreground">Recent Posts</div>
+                      </div>
+                      <div>
+                        <div className="font-medium">{creator.averageUpvotes}</div>
+                        <div className="text-muted-foreground">Avg Upvotes</div>
+                      </div>
+                    </div>
+
+                    {creator.specializations.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {creator.specializations.slice(0, 6).map((spec, index) => (
+                          <Badge key={index} variant="outline" className="text-xs">
+                            {spec}
+                          </Badge>
+                        ))}
+                        {creator.specializations.length > 6 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{creator.specializations.length - 6} more
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-muted-foreground">
+                        Engagement ratio: {(creator.engagementRatio * 100).toFixed(1)}%
+                      </div>
+                      <a
+                        href={creator.profileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 text-xs"
+                      >
+                        View Profile
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

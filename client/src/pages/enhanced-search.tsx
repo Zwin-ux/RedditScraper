@@ -1,415 +1,277 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Brain, Users, TrendingUp, Star, Loader2, ExternalLink, Target } from "lucide-react";
-import { SiReddit } from "react-icons/si";
-import { Link } from "wouter";
+import { Loader2, Search, ExternalLink, TrendingUp } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+
+interface EnhancedPost {
+  id: string;
+  title: string;
+  author: string;
+  subreddit: string;
+  ups: number;
+  num_comments: number;
+  created_utc: number;
+  url: string;
+  permalink: string;
+  selftext: string;
+  domain: string;
+  is_self: boolean;
+  thumbnail?: string;
+  aiAnalysis?: {
+    tags: string[];
+    summary: string;
+    confidence: number;
+  };
+}
+
+interface SearchResult {
+  success: boolean;
+  subreddit: string;
+  query: string;
+  totalResults: number;
+  posts: EnhancedPost[];
+  uniqueUsers: number;
+  topUsers: string[];
+  source: string;
+  authentic: boolean;
+}
 
 export default function EnhancedSearch() {
-  const [domain, setDomain] = useState('ai-tools');
-  const [searchResults, setSearchResults] = useState<any>(null);
-  const { toast } = useToast();
+  const [subreddit, setSubreddit] = useState("datascience");
+  const [query, setQuery] = useState("");
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
 
-  const enhancedSearchMutation = useMutation({
-    mutationFn: (searchDomain: string) => apiRequest('/api/enhanced-reddit-search', 'POST', {
-      domain: searchDomain
-    }),
-    onSuccess: (data: any) => {
-      setSearchResults(data);
-      toast({
-        title: "Enhanced Search Complete",
-        description: `Found ${data.creators?.length || 0} qualified creators`,
-      });
+  const enhancedSearch = useMutation({
+    mutationFn: async (data: { subreddit: string; query?: string; limit?: number }) => {
+      return await apiRequest("/api/search-reddit-enhanced", "POST", data);
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Search Failed",
-        description: error.message,
-        variant: "destructive",
-      });
+    onSuccess: (data) => {
+      if (data.success) {
+        setSearchResult(data);
+      }
     },
   });
 
   const handleSearch = () => {
-    enhancedSearchMutation.mutate(domain);
-  };
-
-  const getActivityColor = (level: string) => {
-    switch (level) {
-      case 'high': return 'text-green-600';
-      case 'medium': return 'text-yellow-600';
-      default: return 'text-red-600';
-    }
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
+    enhancedSearch.mutate({
+      subreddit,
+      query: query || undefined,
+      limit: 100
+    });
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-slate-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link href="/">
-              <Button variant="ghost" size="sm">← Dashboard</Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                <Brain className="text-purple-600" />
-                Enhanced Reddit Search
-              </h1>
-              <p className="text-slate-600">AI-powered creator discovery across specialized domains</p>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex flex-col space-y-4">
+        <h1 className="text-3xl font-bold">Enhanced Reddit Search</h1>
+        <p className="text-muted-foreground">
+          Search any subreddit with AI-powered analysis and authentic data retrieval
+        </p>
+      </div>
+
+      {/* Search Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5" />
+            Advanced Search
+          </CardTitle>
+          <CardDescription>
+            Search specific subreddits with optional query filters and AI analysis
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Subreddit</label>
+              <Input
+                placeholder="datascience"
+                value={subreddit}
+                onChange={(e) => setSubreddit(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Search Query (Optional)</label>
+              <Input
+                placeholder="machine learning, career advice, etc."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              />
             </div>
           </div>
-        </div>
-      </header>
+          <Button 
+            onClick={handleSearch} 
+            disabled={enhancedSearch.isPending || !subreddit}
+            className="w-full"
+          >
+            {enhancedSearch.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Search className="h-4 w-4 mr-2" />
+            )}
+            Search r/{subreddit}
+          </Button>
+        </CardContent>
+      </Card>
 
-      <div className="p-6">
-        {/* Search Configuration */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="w-5 h-5" />
-              Domain-Specific Search
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4 items-end">
-              <div className="flex-1">
-                <label className="text-sm font-medium text-slate-700 mb-2 block">
-                  Select Research Domain
-                </label>
-                <Select value={domain} onValueChange={setDomain}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ai-tools">AI Tools & Applications</SelectItem>
-                    <SelectItem value="ai-research">AI Research & Academia</SelectItem>
-                    <SelectItem value="data-science">Data Science & Analytics</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                onClick={handleSearch}
-                disabled={enhancedSearchMutation.isPending}
-                className="min-w-[140px] bg-purple-600 hover:bg-purple-700"
-              >
-                {enhancedSearchMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Searching
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4 mr-2" />
-                    Search Domain
-                  </>
-                )}
-              </Button>
-            </div>
+      {/* Error Handling */}
+      {enhancedSearch.error && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Search failed. Please check the subreddit name and try again.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Results Section */}
+      {searchResult && (
+        <div className="space-y-6">
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{searchResult.totalResults}</p>
+                  <p className="text-sm text-muted-foreground">Posts Found</p>
+                </div>
+              </CardContent>
+            </Card>
             
-            <div className="mt-4 p-4 bg-slate-50 rounded-lg">
-              <h4 className="font-medium text-slate-900 mb-2">Domain Configuration:</h4>
-              <div className="text-sm text-slate-600 space-y-1">
-                {domain === 'ai-tools' && (
-                  <>
-                    <div><strong>Subreddits:</strong> ChatGPT, LocalLLaMA, OpenAI, ArtificialIntelligence</div>
-                    <div><strong>Keywords:</strong> tool, API, GPT, LLM, chatbot, agent</div>
-                    <div><strong>Min Karma:</strong> 300 | <strong>Post Limit:</strong> 30</div>
-                  </>
-                )}
-                {domain === 'ai-research' && (
-                  <>
-                    <div><strong>Subreddits:</strong> MachineLearning, artificial, deeplearning, reinforcementlearning</div>
-                    <div><strong>Keywords:</strong> research, paper, model, algorithm, neural network</div>
-                    <div><strong>Min Karma:</strong> 500 | <strong>Post Limit:</strong> 25</div>
-                  </>
-                )}
-                {domain === 'data-science' && (
-                  <>
-                    <div><strong>Subreddits:</strong> datascience, statistics, analytics, visualization</div>
-                    <div><strong>Keywords:</strong> analysis, dataset, python, visualization, machine learning</div>
-                    <div><strong>Min Karma:</strong> 400 | <strong>Post Limit:</strong> 20</div>
-                  </>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{searchResult.uniqueUsers}</p>
+                  <p className="text-sm text-muted-foreground">Unique Users</p>
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Results Section */}
-        {searchResults && (
-          <Tabs defaultValue="creators" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="creators">Creators</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-              <TabsTrigger value="insights">Insights</TabsTrigger>
-            </TabsList>
+            <Card>
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <p className="text-lg font-bold">r/{searchResult.subreddit}</p>
+                  <p className="text-sm text-muted-foreground">Subreddit</p>
+                </div>
+              </CardContent>
+            </Card>
 
-            <TabsContent value="creators" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-slate-600 text-sm font-medium">Total Found</div>
-                        <div className="text-3xl font-bold text-slate-900 mt-1">
-                          {searchResults.creators?.length || 0}
-                        </div>
+            <Card>
+              <CardContent className="p-6">
+                <div className="text-center">
+                  <Badge variant={searchResult.authentic ? "default" : "secondary"}>
+                    {searchResult.source}
+                  </Badge>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {searchResult.authentic ? "Live Data" : "Cached"}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Top Users */}
+          {searchResult.topUsers.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Active Contributors</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {searchResult.topUsers.slice(0, 10).map((username, index) => (
+                    <Badge key={index} variant="outline">
+                      u/{username}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Posts Results */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Search Results</CardTitle>
+              <CardDescription>
+                {searchResult.query 
+                  ? `Posts matching "${searchResult.query}" in r/${searchResult.subreddit}`
+                  : `Recent posts from r/${searchResult.subreddit}`
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {searchResult.posts.map((post) => (
+                  <div key={post.id} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <h3 className="font-medium text-sm leading-relaxed pr-4">
+                        {post.title}
+                      </h3>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <a
+                          href={post.permalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          Reddit <ExternalLink className="h-3 w-3" />
+                        </a>
+                        {post.url !== post.permalink && (
+                          <a
+                            href={post.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-green-600 hover:text-green-800 text-xs"
+                          >
+                            Link <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
                       </div>
-                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <Users className="text-purple-600 w-6 h-6" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-slate-600 text-sm font-medium">High Quality</div>
-                        <div className="text-3xl font-bold text-slate-900 mt-1">
-                          {searchResults.creators?.filter((c: any) => c.score >= 80).length || 0}
-                        </div>
-                      </div>
-                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                        <Star className="text-green-600 w-6 h-6" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-slate-600 text-sm font-medium">Avg Score</div>
-                        <div className="text-3xl font-bold text-slate-900 mt-1">
-                          {searchResults.creators?.length > 0 
-                            ? Math.round(searchResults.creators.reduce((sum: number, c: any) => sum + c.score, 0) / searchResults.creators.length)
-                            : 0
-                          }
-                        </div>
-                      </div>
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <TrendingUp className="text-blue-600 w-6 h-6" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Discovered Creators</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Creator</TableHead>
-                        <TableHead>Karma</TableHead>
-                        <TableHead>Score</TableHead>
-                        <TableHead>Activity</TableHead>
-                        <TableHead>Specializations</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {searchResults.creators?.map((creator: any, index: number) => (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                                {creator.username.slice(0, 2).toUpperCase()}
-                              </div>
-                              <div>
-                                <div className="font-medium text-slate-900">u/{creator.username}</div>
-                                <div className="text-sm text-slate-500">{creator.accountAge} days old</div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium">{creator.totalKarma.toLocaleString()}</div>
-                              <div className="text-sm text-slate-500">
-                                L: {creator.linkKarma} | C: {creator.commentKarma}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Progress value={creator.score} className="w-16" />
-                              <span className={`font-medium ${getScoreColor(creator.score)}`}>
-                                {creator.score}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={getActivityColor(creator.activityLevel)}>
-                              {creator.activityLevel}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {creator.specializations?.slice(0, 2).map((spec: string, i: number) => (
-                                <Badge key={i} variant="secondary" className="text-xs">
-                                  {spec}
-                                </Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => window.open(creator.profileUrl, '_blank')}
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="analytics" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Score Distribution</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {[
-                        { range: '80-100', label: 'Excellent', count: searchResults.creators?.filter((c: any) => c.score >= 80).length || 0 },
-                        { range: '60-79', label: 'Good', count: searchResults.creators?.filter((c: any) => c.score >= 60 && c.score < 80).length || 0 },
-                        { range: '40-59', label: 'Average', count: searchResults.creators?.filter((c: any) => c.score >= 40 && c.score < 60).length || 0 },
-                        { range: '0-39', label: 'Below Average', count: searchResults.creators?.filter((c: any) => c.score < 40).length || 0 }
-                      ].map((item, index) => (
-                        <div key={index} className="flex items-center justify-between">
-                          <div>
-                            <span className="font-medium">{item.label}</span>
-                            <span className="text-slate-500 text-sm ml-2">({item.range})</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Progress value={(item.count / (searchResults.creators?.length || 1)) * 100} className="w-20" />
-                            <span className="text-sm font-medium w-8">{item.count}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Activity Levels</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {['high', 'medium', 'low'].map((level) => {
-                        const count = searchResults.creators?.filter((c: any) => c.activityLevel === level).length || 0;
-                        return (
-                          <div key={level} className="flex items-center justify-between">
-                            <span className={`font-medium capitalize ${getActivityColor(level)}`}>
-                              {level} Activity
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <Progress value={(count / (searchResults.creators?.length || 1)) * 100} className="w-20" />
-                              <span className="text-sm font-medium w-8">{count}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="insights" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Brain className="w-5 h-5" />
-                    Domain Insights
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="prose max-w-none">
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                      <h4 className="font-semibold text-purple-900 mb-2">Search Summary</h4>
-                      <p className="text-purple-800">
-                        Enhanced search of {domain.replace('-', ' ')} domain identified {searchResults.creators?.length || 0} qualified creators 
-                        using AI-powered filtering and scoring algorithms.
-                      </p>
                     </div>
                     
-                    <div className="mt-6 space-y-4">
-                      <div>
-                        <h4 className="font-semibold text-slate-900">Quality Metrics:</h4>
-                        <ul className="list-disc list-inside text-slate-700 space-y-1">
-                          <li>Minimum karma requirements enforced</li>
-                          <li>Account age and activity patterns analyzed</li>
-                          <li>Specialization tags extracted using AI</li>
-                          <li>Engagement ratios calculated from posting history</li>
-                        </ul>
-                      </div>
-                      
-                      <div>
-                        <h4 className="font-semibold text-slate-900">Recommendations:</h4>
-                        <ul className="list-disc list-inside text-slate-700 space-y-1">
-                          <li>Focus on creators with scores above 80 for partnerships</li>
-                          <li>Consider medium-activity creators for consistent engagement</li>
-                          <li>Review specialization tags for domain expertise</li>
-                          <li>Monitor account age for established community presence</li>
-                        </ul>
-                      </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>u/{post.author}</span>
+                      <span>{post.ups} upvotes</span>
+                      <span>{post.num_comments} comments</span>
+                      <span>{new Date(post.created_utc * 1000).toLocaleDateString()}</span>
+                      <span>{post.domain}</span>
                     </div>
+                    
+                    {/* AI Analysis */}
+                    {post.aiAnalysis && post.aiAnalysis.tags.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-1">
+                          {post.aiAnalysis.tags.map((tag, index) => (
+                            <Badge key={index} variant="secondary" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                        {post.aiAnalysis.summary !== 'Analysis unavailable' && (
+                          <p className="text-xs text-muted-foreground">
+                            AI Summary: {post.aiAnalysis.summary}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {post.selftext && (
+                      <p className="text-xs text-muted-foreground line-clamp-3">
+                        {post.selftext.substring(0, 300)}...
+                      </p>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        )}
-
-        {/* Empty State */}
-        {!searchResults && (
-          <Card>
-            <CardContent className="pt-16 pb-16 text-center">
-              <Brain className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                Advanced Creator Discovery
-              </h3>
-              <p className="text-slate-600 mb-6 max-w-md mx-auto">
-                Use AI-powered enhanced search to find qualified creators across specialized domains 
-                with advanced filtering and scoring.
-              </p>
-              <Button onClick={handleSearch} className="bg-purple-600 hover:bg-purple-700">
-                Start Enhanced Search
-              </Button>
+                ))}
+              </div>
             </CardContent>
           </Card>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
