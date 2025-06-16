@@ -27,7 +27,7 @@ export function GlobalChatbot({ isOpen, onToggle }: GlobalChatbotProps) {
     {
       id: '1',
       type: 'bot',
-      content: "Hi! I'm your AI assistant with access to all your Reddit creator data. I can analyze creators, posts, engagement patterns, and provide insights across your entire database. What would you like to explore?",
+      content: "Hi! I'm your Reddit analysis assistant. I can help you find top creators, analyze subreddit trends, search specific communities, and provide insights from authentic Reddit data. Try asking:\n\n• \"Show me the highest karma creators\"\n• \"Find data science trends from r/datascience\"\n• \"Search r/MachineLearning for AI research\"\n• \"Who are the top creators in Python communities?\"\n\nWhat would you like to explore?",
       timestamp: new Date()
     }
   ]);
@@ -35,7 +35,25 @@ export function GlobalChatbot({ isOpen, onToggle }: GlobalChatbotProps) {
   const [isMinimized, setIsMinimized] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Enhanced chat mutation with comprehensive data analysis
+  // Quick action buttons for common tasks
+  const quickActions = [
+    { label: "Show top creators", query: "Show me the highest karma creators" },
+    { label: "Data science trends", query: "Find data science trends from r/datascience" },
+    { label: "Search communities", query: "Help me search Reddit communities" },
+    { label: "AI research insights", query: "What are the latest AI research trends?" }
+  ];
+
+  // Get current page context for better assistance
+  const getCurrentPage = () => {
+    const path = window.location.pathname;
+    if (path.includes('analytics')) return 'creator-analytics';
+    if (path.includes('data-science')) return 'data-science-analyzer';
+    if (path.includes('enhanced-search')) return 'enhanced-search';
+    if (path.includes('trends')) return 'trends-analysis';
+    return 'dashboard';
+  };
+
+  // Enhanced chat mutation with Reddit-focused assistance
   const chatMutation = useMutation({
     mutationFn: async (message: string) => {
       const response = await fetch('/api/chat/enhanced', {
@@ -44,7 +62,8 @@ export function GlobalChatbot({ isOpen, onToggle }: GlobalChatbotProps) {
         body: JSON.stringify({ 
           message, 
           context: messages.slice(-5),
-          includeFullAnalysis: true 
+          includeFullAnalysis: true,
+          currentPage: getCurrentPage()
         })
       });
       return response.json();
