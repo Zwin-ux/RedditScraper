@@ -1599,6 +1599,104 @@ ${posts.slice(0, 5).map(p =>
   // Add the fixed Reddit scraping endpoint
   addFixedRedditEndpoint(app);
 
+  // Exa-enhanced search endpoints
+  app.post("/api/search/exa", async (req, res) => {
+    try {
+      const { query, numResults = 20, timeframe = 'month' } = req.body;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: 'Query is required' });
+      }
+
+      console.log(`Exa Search Request: "${query}"`);
+      
+      const startDate = new Date();
+      if (timeframe === 'week') {
+        startDate.setDate(startDate.getDate() - 7);
+      } else if (timeframe === 'month') {
+        startDate.setMonth(startDate.getMonth() - 1);
+      } else if (timeframe === 'year') {
+        startDate.setFullYear(startDate.getFullYear() - 1);
+      }
+
+      const searchResult = await exaSearchService.searchRedditContent(query, {
+        numResults: Math.min(numResults, 50),
+        startPublishedDate: startDate.toISOString()
+      });
+
+      res.json(searchResult);
+    } catch (error) {
+      console.error("Exa search failed:", error);
+      res.status(500).json({ 
+        error: 'Search failed', 
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.post("/api/search/exa/data-science", async (req, res) => {
+    try {
+      const { query } = req.body;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: 'Query is required' });
+      }
+
+      console.log(`Exa Data Science Search: "${query}"`);
+      const searchResult = await exaSearchService.searchDataScienceContent(query);
+      
+      res.json(searchResult);
+    } catch (error) {
+      console.error("Exa data science search failed:", error);
+      res.status(500).json({ 
+        error: 'Data science search failed', 
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.post("/api/search/exa/subreddit", async (req, res) => {
+    try {
+      const { subreddit, query, timeframe = 'month' } = req.body;
+      
+      if (!subreddit || typeof subreddit !== 'string') {
+        return res.status(400).json({ error: 'Subreddit is required' });
+      }
+
+      console.log(`Exa Subreddit Search: r/${subreddit} - "${query || 'all posts'}"`);
+      const searchResult = await exaSearchService.searchBySubreddit(
+        subreddit, 
+        query, 
+        timeframe as 'week' | 'month' | 'year'
+      );
+      
+      res.json(searchResult);
+    } catch (error) {
+      console.error("Exa subreddit search failed:", error);
+      res.status(500).json({ 
+        error: 'Subreddit search failed', 
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.get("/api/search/exa/trends/:domain?", async (req, res) => {
+    try {
+      const domain = req.params.domain as 'data_science' | 'ai' | 'programming' | 'general' || 'general';
+      
+      console.log(`Exa Trending Topics: ${domain}`);
+      const searchResult = await exaSearchService.findTrendingTopics(domain);
+      
+      res.json(searchResult);
+    } catch (error) {
+      console.error("Exa trending topics search failed:", error);
+      res.status(500).json({ 
+        error: 'Trending topics search failed', 
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

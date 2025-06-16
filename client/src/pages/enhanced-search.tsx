@@ -43,10 +43,38 @@ interface SearchResult {
   authentic: boolean;
 }
 
+interface ExaSearchResult {
+  title: string;
+  url: string;
+  publishedDate: string;
+  author: string;
+  text: string;
+  highlights: string[];
+  score: number;
+  subreddit: string;
+  domain: string;
+}
+
+interface ExaSearchResponse {
+  query: string;
+  results: ExaSearchResult[];
+  totalResults: number;
+  relatedTopics: string[];
+  insights: {
+    topKeywords: string[];
+    emergingTrends: string[];
+    popularSubreddits: string[];
+    contentTypes: string[];
+  };
+  aiAnalysis?: any;
+}
+
 export default function EnhancedSearch() {
   const [subreddit, setSubreddit] = useState("datascience");
   const [query, setQuery] = useState("");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const [exaSearchResult, setExaSearchResult] = useState<ExaSearchResponse | null>(null);
+  const [searchMode, setSearchMode] = useState<'reddit' | 'exa'>('exa');
   const [isSubredditOpen, setIsSubredditOpen] = useState(false);
   const [subredditSearch, setSubredditSearch] = useState("");
 

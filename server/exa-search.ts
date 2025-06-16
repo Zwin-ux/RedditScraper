@@ -84,7 +84,7 @@ class ExaSearchService {
           publishedDate: result.publishedDate || new Date().toISOString(),
           author: author,
           text: result.text || '',
-          highlights: result.highlights || [],
+          highlights: [],
           score: result.score || 0,
           subreddit: subreddit,
           domain: 'reddit.com'
