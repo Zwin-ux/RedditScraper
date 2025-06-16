@@ -62,6 +62,10 @@ class EnhancedRedditAgent {
     this.accessToken = data.access_token;
     this.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000; // 1 minute buffer
 
+    if (!this.accessToken) {
+      throw new Error('Failed to retrieve access token from Reddit API');
+    }
+
     return this.accessToken;
   }
 
@@ -217,7 +221,7 @@ class EnhancedRedditAgent {
     try {
       if (data.posts && data.posts.length > 0) {
         const posts = data.posts.slice(0, 5).map((p: any) => ({ title: p.title, content: p.selftext || '' }));
-        const analysis = await analyzeCreatorContent(username, posts);
+        const analysis = await analyzeCreatorContent(posts, []);
         specializations = analysis.tags.length > 0 ? analysis.tags : ['AI General'];
       }
     } catch (error) {

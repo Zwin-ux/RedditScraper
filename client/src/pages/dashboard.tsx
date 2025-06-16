@@ -372,14 +372,14 @@ export default function Dashboard() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-slate-600 text-sm font-medium">Posts Analyzed</p>
-                    <p className="text-3xl font-bold text-slate-900 mt-1">
+                    <div className="text-slate-600 text-sm font-medium">Posts Analyzed</div>
+                    <div className="text-3xl font-bold text-slate-900 mt-1">
                       {statsLoading ? (
                         <div className="h-8 w-16 bg-slate-200 animate-pulse rounded"></div>
                       ) : (
                         stats?.postsAnalyzed.toLocaleString() || '0'
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                     <BarChart3 className="text-purple-600 w-6 h-6" />
