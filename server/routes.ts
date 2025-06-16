@@ -827,27 +827,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Data science analyzer endpoint
+  // Data science analyzer endpoint  
   app.post("/api/search-datascience", async (req, res) => {
     try {
       const { query, limit = 50 } = req.body;
       
       console.log(`Searching r/datascience for: ${query || 'recent posts'}`);
       
-      // Use the Reddit API client to get real posts
-      const searchResult = await redditApiClient.searchSubreddit('datascience', query, limit);
-      const posts = searchResult.posts.map(post => ({
-        id: post.id,
-        title: post.title,
-        author: post.author,
-        subreddit: post.subreddit,
-        ups: post.ups,
-        num_comments: post.num_comments,
-        created_utc: post.created_utc,
-        url: post.url,
-        permalink: `https://reddit.com${post.permalink}`,
-        selftext: post.selftext
-      }));
+      // Use enhanced Reddit scraper for real data
+      const { enhancedRedditScraper } = await import('./enhanced-reddit-scraper');
+      
+      let posts;
+      if (query) {
+        posts = await enhancedRedditScraper.searchSubreddit('datascience', query, limit);
+      } else {
+        posts = await enhancedRedditScraper.scrapeSubredditPosts('datascience', 'hot', limit);
+      }
+
+      console.log(`Retrieved ${posts.length} authentic posts from r/datascience`);
 
       // Analyze trends using Gemini AI
       let trends;
@@ -888,6 +885,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: false,
         message: "Failed to search r/datascience",
         error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Real Reddit posts endpoint with live links
+  app.get("/api/reddit/recent-posts/:subreddit", async (req, res) => {
+    try {
+      const { subreddit } = req.params;
+      const { limit = 10 } = req.query;
+      
+      console.log(`Fetching recent posts from r/${subreddit}`);
+      
+      // Use enhanced Reddit scraper for authentic data
+      const { enhancedRedditScraper } = await import('./enhanced-reddit-scraper');
+      const posts = await enhancedRedditScraper.scrapeSubredditPosts(subreddit, 'hot', parseInt(limit as string));
+      
+      res.json({
+        success: true,
+        subreddit,
+        posts: posts.map(post => ({
+          id: post.id,
+          title: post.title,
+          author: post.author,
+          ups: post.ups,
+          num_comments: post.num_comments,
+          created: new Date(post.created_utc * 1000).toLocaleString(),
+          reddit_link: post.permalink,
+          external_url: post.url !== post.permalink ? post.url : null,
+          domain: post.domain,
+          is_self_post: post.is_self,
+          preview_text: post.selftext ? post.selftext.slice(0, 200) + '...' : null
+        }))
+      });
+
+    } catch (error) {
+      console.error(`Failed to fetch posts from r/${req.params.subreddit}:`, error);
+      res.status(500).json({ 
+        success: false,
+        message: `Failed to fetch posts from r/${req.params.subreddit}`,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Test Reddit scraper endpoint
+  app.get("/api/test-reddit-scraper", async (req, res) => {
+    try {
+      console.log('Testing Reddit scraper with real data...');
+      const { enhancedRedditScraper } = await import('./enhanced-reddit-scraper');
+      
+      // Get real posts from r/datascience
+      const posts = await enhancedRedditScraper.scrapeSubredditPosts('datascience', 'hot', 5);
+      
+      console.log(`Successfully retrieved ${posts.length} real posts from r/datascience`);
+      
+      res.json({
+        success: true,
+        message: `Retrieved ${posts.length} authentic posts from r/datascience`,
+        posts: posts.map(post => ({
+          title: post.title,
+          author: post.author,
+          score: post.ups,
+          comments: post.num_comments,
+          reddit_link: post.permalink,
+          external_url: post.url,
+          domain: post.domain,
+          created: new Date(post.created_utc * 1000).toISOString(),
+          preview: post.selftext ? post.selftext.substring(0, 150) + '...' : null
+        }))
+      });
+
+    } catch (error) {
+      console.error('Reddit scraper test failed:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: 'Reddit scraper test failed'
       });
     }
   });

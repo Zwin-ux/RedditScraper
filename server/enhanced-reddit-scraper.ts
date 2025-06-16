@@ -49,6 +49,10 @@ class EnhancedRedditScraper {
     this.accessToken = data.access_token;
     this.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000;
 
+    if (!this.accessToken) {
+      throw new Error('Failed to retrieve access token from Reddit API');
+    }
+
     return this.accessToken;
   }
 
