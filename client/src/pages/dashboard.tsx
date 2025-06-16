@@ -203,7 +203,7 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div className="flex-1 px-4 py-6">
-          <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Actions</h3>
+          <h3 className="text-sm font-semibold text-slate-900 mb-4">Analysis Tools</h3>
           <div className="space-y-3">
             <Link href="/workflow">
               <Button 
@@ -215,27 +215,72 @@ export default function Dashboard() {
               </Button>
             </Link>
 
-            <Button 
-              onClick={() => exportMutation.mutate('csv')}
-              disabled={exportMutation.isPending}
-              className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {exportMutation.isPending ? 'Exporting...' : 'Export CSV'}
-            </Button>
-            
-            <Button 
-              onClick={() => {
-                queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
-                queryClient.invalidateQueries({ queryKey: ['/api/creators'] });
-                toast({ title: "Data refreshed successfully" });
-              }}
-              variant="outline"
-              className="w-full justify-start"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh Data
-            </Button>
+            <Link href="/data-science">
+              <Button 
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Data Science Analyzer
+              </Button>
+            </Link>
+
+            <Link href="/enhanced-search">
+              <Button 
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <Search className="w-4 h-4 mr-2" />
+                Enhanced Search
+              </Button>
+            </Link>
+
+            <Link href="/analytics">
+              <Button 
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Creator Analytics
+              </Button>
+            </Link>
+
+            <Link href="/trends">
+              <Button 
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Trends Analysis
+              </Button>
+            </Link>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Actions</h3>
+            <div className="space-y-3">
+              <Button 
+                onClick={() => exportMutation.mutate('csv')}
+                disabled={exportMutation.isPending}
+                className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {exportMutation.isPending ? 'Exporting...' : 'Export CSV'}
+              </Button>
+              
+              <Button 
+                onClick={() => {
+                  queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+                  queryClient.invalidateQueries({ queryKey: ['/api/creators'] });
+                  toast({ title: "Data refreshed successfully" });
+                }}
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh Data
+              </Button>
+            </div>
           </div>
         </div>
 
