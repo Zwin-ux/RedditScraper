@@ -405,26 +405,32 @@ export function SubredditSearch({ isOpen, onClose }: SubredditSearchProps) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 <Button 
                   onClick={() => handleEnhancedSearch('ai-research')}
-                  disabled={scrapeMutation.isPending || bulkScrapeMutation.isPending}
+                  disabled={scrapeMutation.isPending || bulkScrapeMutation.isPending || enhancedSearchMutation.isPending}
                   variant="outline"
                   size="sm"
+                  className="flex items-center gap-1"
                 >
+                  {enhancedSearchMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                   AI Research
                 </Button>
                 <Button 
                   onClick={() => handleEnhancedSearch('ai-tools')}
-                  disabled={scrapeMutation.isPending || bulkScrapeMutation.isPending}
+                  disabled={scrapeMutation.isPending || bulkScrapeMutation.isPending || enhancedSearchMutation.isPending}
                   variant="outline"
                   size="sm"
+                  className="flex items-center gap-1"
                 >
+                  {enhancedSearchMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                   AI Tools & Apps
                 </Button>
                 <Button 
                   onClick={() => handleEnhancedSearch('data-science')}
-                  disabled={scrapeMutation.isPending || bulkScrapeMutation.isPending}
+                  disabled={scrapeMutation.isPending || bulkScrapeMutation.isPending || enhancedSearchMutation.isPending}
                   variant="outline"
                   size="sm"
+                  className="flex items-center gap-1"
                 >
+                  {enhancedSearchMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                   Data Science
                 </Button>
               </div>
@@ -495,22 +501,26 @@ export function SubredditSearch({ isOpen, onClose }: SubredditSearchProps) {
         </Tabs>
 
         {/* Global Loading States */}
-        {(scrapeMutation.isPending || bulkScrapeMutation.isPending) && (
+        {(scrapeMutation.isPending || bulkScrapeMutation.isPending || enhancedSearchMutation.isPending) && (
           <Card className="border-blue-200 bg-blue-50 mt-4">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
                 <div>
                   <p className="font-medium">
-                    {scrapeMutation.isPending 
-                      ? `Scraping r/${selectedSubreddit}` 
-                      : 'Processing multiple subreddits'
+                    {enhancedSearchMutation.isPending 
+                      ? 'Enhanced Creator Discovery in Progress'
+                      : scrapeMutation.isPending 
+                        ? `Scraping r/${selectedSubreddit}` 
+                        : 'Processing multiple subreddits'
                     }
                   </p>
                   <p className="text-sm text-slate-600">
-                    {scrapeMutation.isPending 
-                      ? 'Discovering creators from authentic Reddit posts...' 
-                      : 'This may take a few minutes depending on the number of subreddits...'
+                    {enhancedSearchMutation.isPending 
+                      ? 'Using advanced algorithms to find high-quality creators across AI communities...'
+                      : scrapeMutation.isPending 
+                        ? 'Discovering creators from authentic Reddit posts...' 
+                        : 'This may take a few minutes depending on the number of subreddits...'
                     }
                   </p>
                 </div>
