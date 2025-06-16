@@ -830,9 +830,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Data science analyzer endpoint with real Reddit data
   app.post("/api/search-datascience", async (req, res) => {
     try {
-      const { query, limit = 50 } = req.body;
+      const { query, limit = 50, subreddit = 'datascience' } = req.body;
       
-      console.log(`Searching r/datascience for: ${query || 'recent posts'}`);
+      console.log(`Searching r/${subreddit} for: ${query || 'recent posts'}`);
       
       // Direct Reddit API call for authentic data
       const clientId = process.env.REDDIT_CLIENT_ID;
@@ -863,9 +863,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get real posts from Reddit
       let apiUrl;
       if (query) {
-        apiUrl = `https://oauth.reddit.com/r/datascience/search?q=${encodeURIComponent(query)}&restrict_sr=true&sort=relevance&limit=${Math.min(limit, 100)}&raw_json=1`;
+        apiUrl = `https://oauth.reddit.com/r/${subreddit}/search?q=${encodeURIComponent(query)}&restrict_sr=true&sort=relevance&limit=${Math.min(limit, 100)}&raw_json=1`;
       } else {
-        apiUrl = `https://oauth.reddit.com/r/datascience/hot?limit=${Math.min(limit, 100)}&raw_json=1`;
+        apiUrl = `https://oauth.reddit.com/r/${subreddit}/hot?limit=${Math.min(limit, 100)}&raw_json=1`;
       }
 
       const postsResponse = await fetch(apiUrl, {

@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, ExternalLink, TrendingUp } from "lucide-react";
+import { Loader2, Search, ExternalLink, TrendingUp, CheckCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiRequest } from "@/lib/queryClient";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface EnhancedPost {
   id: string;
@@ -45,6 +47,32 @@ export default function EnhancedSearch() {
   const [subreddit, setSubreddit] = useState("datascience");
   const [query, setQuery] = useState("");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const [isSubredditOpen, setIsSubredditOpen] = useState(false);
+  const [subredditSearch, setSubredditSearch] = useState("");
+
+  // Popular subreddits for easy discovery
+  const popularSubreddits = [
+    { name: "datascience", description: "Data science community" },
+    { name: "MachineLearning", description: "Machine learning research and discussion" },
+    { name: "artificial", description: "Artificial intelligence topics" },
+    { name: "ChatGPT", description: "ChatGPT discussions and tips" },
+    { name: "OpenAI", description: "OpenAI products and research" },
+    { name: "LocalLLaMA", description: "Local language models" },
+    { name: "deeplearning", description: "Deep learning techniques" },
+    { name: "statistics", description: "Statistical analysis and methods" },
+    { name: "analytics", description: "Data analytics and insights" },
+    { name: "Python", description: "Python programming" },
+    { name: "programming", description: "General programming discussion" },
+    { name: "tech", description: "Technology news and discussion" },
+    { name: "cscareerquestions", description: "Computer science career advice" },
+    { name: "learnmachinelearning", description: "Learning machine learning" },
+    { name: "ArtificialIntelligence", description: "AI discussions and news" }
+  ];
+
+  const filteredSubreddits = popularSubreddits.filter(sub =>
+    sub.name.toLowerCase().includes(subredditSearch.toLowerCase()) ||
+    sub.description.toLowerCase().includes(subredditSearch.toLowerCase())
+  );
 
   const enhancedSearch = useMutation({
     mutationFn: async (data: { subreddit: string; query?: string; limit?: number }) => {
@@ -89,11 +117,71 @@ export default function EnhancedSearch() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Subreddit</label>
-              <Input
-                placeholder="datascience"
-                value={subreddit}
-                onChange={(e) => setSubreddit(e.target.value)}
-              />
+              <Popover open={isSubredditOpen} onOpenChange={setIsSubredditOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={isSubredditOpen}
+                    className="w-full justify-between"
+                  >
+                    {subreddit ? `r/${subreddit}` : "Select subreddit..."}
+                    <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0">
+                  <Command>
+                    <CommandInput 
+                      placeholder="Search subreddits..." 
+                      value={subredditSearch}
+                      onValueChange={setSubredditSearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        <div className="p-4 text-center">
+                          <p className="text-sm text-muted-foreground mb-2">
+                            No matches found. Try typing the exact subreddit name.
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (subredditSearch.trim()) {
+                                setSubreddit(subredditSearch.trim());
+                                setIsSubredditOpen(false);
+                              }
+                            }}
+                          >
+                            Use "{subredditSearch}"
+                          </Button>
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup heading="Popular Subreddits">
+                        {filteredSubreddits.map((sub) => (
+                          <CommandItem
+                            key={sub.name}
+                            value={sub.name}
+                            onSelect={(currentValue) => {
+                              setSubreddit(currentValue);
+                              setIsSubredditOpen(false);
+                            }}
+                          >
+                            <CheckCircle
+                              className={`mr-2 h-4 w-4 ${
+                                subreddit === sub.name ? "opacity-100" : "opacity-0"
+                              }`}
+                            />
+                            <div>
+                              <div className="font-medium">r/{sub.name}</div>
+                              <div className="text-xs text-muted-foreground">{sub.description}</div>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Search Query (Optional)</label>
@@ -105,6 +193,24 @@ export default function EnhancedSearch() {
               />
             </div>
           </div>
+          
+          {/* Quick Subreddit Suggestions */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Quick Select:</label>
+            <div className="flex flex-wrap gap-2">
+              {["datascience", "MachineLearning", "ChatGPT", "Python", "artificial"].map((quickSub) => (
+                <Button
+                  key={quickSub}
+                  variant={subreddit === quickSub ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSubreddit(quickSub)}
+                >
+                  r/{quickSub}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           <Button 
             onClick={handleSearch} 
             disabled={enhancedSearch.isPending || !subreddit}

@@ -42,11 +42,24 @@ interface AnalysisResult {
 
 export default function DataScienceAnalyzer() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSubreddit, setSelectedSubreddit] = useState("datascience");
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const queryClient = useQueryClient();
 
+  // Popular data science related subreddits
+  const dataSubreddits = [
+    { name: "datascience", description: "Data science community" },
+    { name: "MachineLearning", description: "Machine learning research" },
+    { name: "statistics", description: "Statistical analysis" },
+    { name: "analytics", description: "Data analytics" },
+    { name: "Python", description: "Python programming" },
+    { name: "artificial", description: "Artificial intelligence" },
+    { name: "deeplearning", description: "Deep learning" },
+    { name: "learnmachinelearning", description: "ML learning resources" }
+  ];
+
   const analyzeDataScience = useMutation({
-    mutationFn: async (data: { query?: string; limit?: number }) => {
+    mutationFn: async (data: { query?: string; limit?: number; subreddit?: string }) => {
       return await apiRequest("/api/search-datascience", "POST", data);
     },
     onSuccess: (data) => {
@@ -59,6 +72,7 @@ export default function DataScienceAnalyzer() {
   const handleAnalyze = () => {
     analyzeDataScience.mutate({
       query: searchQuery || undefined,
+      subreddit: selectedSubreddit,
       limit: 50
     });
   };
@@ -68,7 +82,7 @@ export default function DataScienceAnalyzer() {
       <div className="flex flex-col space-y-4">
         <h1 className="text-3xl font-bold">Data Science Analyzer</h1>
         <p className="text-muted-foreground">
-          Analyze authentic Reddit posts from r/datascience to discover trends, skills, and industry insights
+          Analyze authentic Reddit posts from data science communities to discover trends, skills, and industry insights
         </p>
       </div>
 
@@ -84,6 +98,24 @@ export default function DataScienceAnalyzer() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Subreddit Selection */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Select Subreddit:</label>
+            <div className="flex flex-wrap gap-2">
+              {dataSubreddits.map((sub) => (
+                <Button
+                  key={sub.name}
+                  variant={selectedSubreddit === sub.name ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedSubreddit(sub.name)}
+                  className="text-xs"
+                >
+                  r/{sub.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex gap-2">
             <Input
               placeholder="Search for topics (e.g., machine learning, career advice) or leave empty for recent posts"
@@ -100,7 +132,7 @@ export default function DataScienceAnalyzer() {
               ) : (
                 <Search className="h-4 w-4" />
               )}
-              Analyze
+              Analyze r/{selectedSubreddit}
             </Button>
           </div>
         </CardContent>
