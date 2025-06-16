@@ -8,6 +8,7 @@ import { scrapeSubredditCreators, enhanceCreatorsWithAI } from "./simple-reddit-
 import { addFixedRedditEndpoint } from "./fixed-reddit-endpoint";
 import { analyzeDataScienceTrends, analyzePostRelevance, analyzeCreatorContent } from "./gemini";
 import { enhancedRedditAgent, AI_RESEARCH_CONFIG, AI_TOOLS_CONFIG, DATA_SCIENCE_CONFIG } from "./enhanced-reddit-agent";
+import { exaSearchService } from "./exa-search.js";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
