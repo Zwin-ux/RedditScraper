@@ -11,42 +11,41 @@ import type { Creator } from "@shared/schema";
 
 export default function CreatorAnalytics() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSubreddit, setSelectedSubreddit] = useState("");
-  const [selectedTag, setSelectedTag] = useState("");
-  const [engagementLevel, setEngagementLevel] = useState("");
+  const [sortBy, setSortBy] = useState("karma");
 
-  const { data: creators = [], isLoading } = useQuery({
-    queryKey: ["/api/creators", { 
-      search: searchQuery || undefined,
-      subreddit: selectedSubreddit || undefined,
-      tag: selectedTag || undefined,
-      engagementLevel: engagementLevel || undefined,
-      limit: 50
-    }],
-    queryFn: () => api.getCreators({ 
-      search: searchQuery || undefined,
-      subreddit: selectedSubreddit || undefined,
-      tag: selectedTag || undefined,
-      engagementLevel: engagementLevel || undefined,
-      limit: 50
-    }),
+  const { data: allCreators = [], isLoading } = useQuery({
+    queryKey: ["/api/creators", { limit: 200 }],
+    queryFn: () => api.getCreators({ limit: 200 }),
   });
 
-  const { data: subreddits = [] } = useQuery({
-    queryKey: ["/api/subreddits"],
-    queryFn: () => api.getSubreddits(),
-  });
+  // Sort and filter creators based on criteria
+  const creators = allCreators
+    .filter(creator => 
+      !searchQuery || 
+      creator.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      creator.subreddit.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "karma":
+          return b.karma - a.karma;
+        case "engagement":
+          return b.engagementScore - a.engagementScore;
+        case "recent":
+          return new Date(b.lastActive || 0).getTime() - new Date(a.lastActive || 0).getTime();
+        default:
+          return b.karma - a.karma;
+      }
+    })
+    .slice(0, 50);
 
-  // Get unique tags from creators
-  const allTags = creators.flatMap(creator => creator.tags || []);
-  const uniqueTags = Array.from(new Set(allTags));
+  const topCreatorsByKarma = allCreators
+    .sort((a, b) => b.karma - a.karma)
+    .slice(0, 10);
 
-  const clearFilters = () => {
-    setSearchQuery("");
-    setSelectedSubreddit("");
-    setSelectedTag("");
-    setEngagementLevel("");
-  };
+  const highEngagementCreators = allCreators
+    .filter(creator => creator.engagementScore >= 80)
+    .length;
 
   const getEngagementLevel = (score: number) => {
     if (score >= 80) return "High";
@@ -63,95 +62,56 @@ export default function CreatorAnalytics() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex flex-col space-y-4">
-        <h1 className="text-3xl font-bold">Creator Analytics</h1>
+        <h1 className="text-3xl font-bold">Top Reddit Creators</h1>
         <p className="text-muted-foreground">
-          Analyze Reddit creators and their engagement patterns across different subreddits
+          Discover the highest karma creators and most engaged users across Reddit communities
         </p>
       </div>
 
-      {/* Filters */}
+      {/* Search and Sort */}
       <Card>
         <CardHeader>
-          <CardTitle>Filters</CardTitle>
+          <CardTitle>Find Top Creators</CardTitle>
           <CardDescription>
-            Filter creators by search query, subreddit, tags, or engagement level
+            Search by username or subreddit, and sort by different criteria
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Search</label>
               <Input
-                placeholder="Search creators..."
+                placeholder="Search by username or subreddit..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             
             <div className="space-y-2">
-              <label className="text-sm font-medium">Subreddit</label>
-              <Select value={selectedSubreddit} onValueChange={setSelectedSubreddit}>
+              <label className="text-sm font-medium">Sort By</label>
+              <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All subreddits" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All subreddits</SelectItem>
-                  {subreddits.map(subreddit => (
-                    <SelectItem key={subreddit.id} value={subreddit.name}>
-                      r/{subreddit.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Tag</label>
-              <Select value={selectedTag} onValueChange={setSelectedTag}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All tags" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All tags</SelectItem>
-                  {uniqueTags.slice(0, 20).map(tag => (
-                    <SelectItem key={tag} value={tag}>
-                      {tag}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Engagement</label>
-              <Select value={engagementLevel} onValueChange={setEngagementLevel}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All levels" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All levels</SelectItem>
-                  <SelectItem value="high">High (80+)</SelectItem>
-                  <SelectItem value="medium">Medium (50-79)</SelectItem>
-                  <SelectItem value="low">Low (0-49)</SelectItem>
+                  <SelectItem value="karma">Highest Karma</SelectItem>
+                  <SelectItem value="engagement">Best Engagement</SelectItem>
+                  <SelectItem value="recent">Most Recent Activity</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-          
-          <Button onClick={clearFilters} variant="outline" size="sm">
-            Clear Filters
-          </Button>
         </CardContent>
       </Card>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Top Performers Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Creators</p>
-                <p className="text-2xl font-bold">{creators.length}</p>
+                <p className="text-2xl font-bold">{allCreators.length}</p>
               </div>
               <Users className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -162,13 +122,25 @@ export default function CreatorAnalytics() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Avg Engagement</p>
+                <p className="text-sm font-medium text-muted-foreground">Highest Karma</p>
                 <p className="text-2xl font-bold">
-                  {creators.length > 0 
-                    ? Math.round(creators.reduce((sum, c) => sum + c.engagementScore, 0) / creators.length)
+                  {topCreatorsByKarma.length > 0 
+                    ? topCreatorsByKarma[0].karma.toLocaleString()
                     : 0
                   }
                 </p>
+              </div>
+              <Award className="h-8 w-8 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">High Engagement</p>
+                <p className="text-2xl font-bold">{highEngagementCreators}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -179,89 +151,105 @@ export default function CreatorAnalytics() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">High Performers</p>
-                <p className="text-2xl font-bold">
-                  {creators.filter(c => c.engagementScore >= 80).length}
-                </p>
+                <p className="text-sm font-medium text-muted-foreground">Showing Results</p>
+                <p className="text-2xl font-bold">{creators.length}</p>
               </div>
-              <Award className="h-8 w-8 text-muted-foreground" />
+              <Users className="h-8 w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Creators List */}
+      {/* Top Creators Leaderboard */}
       <Card>
         <CardHeader>
-          <CardTitle>Creators</CardTitle>
+          <CardTitle>
+            {sortBy === "karma" ? "🏆 Highest Karma Creators" : 
+             sortBy === "engagement" ? "⚡ Most Engaged Creators" : 
+             "📈 Most Active Creators"}
+          </CardTitle>
           <CardDescription>
-            {creators.length > 0 
-              ? `Showing ${creators.length} creators matching your filters`
-              : "No creators found matching your filters"
+            {searchQuery 
+              ? `Showing ${creators.length} creators matching "${searchQuery}"`
+              : `Top ${creators.length} creators sorted by ${sortBy === "karma" ? "karma" : sortBy === "engagement" ? "engagement score" : "recent activity"}`
             }
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">Loading creators...</p>
+              <p className="text-muted-foreground">Loading top creators...</p>
             </div>
           ) : creators.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">No creators found. Try adjusting your filters.</p>
+              <p className="text-muted-foreground">No creators found matching your search.</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {creators.map((creator) => (
-                <div key={creator.id} className="border rounded-lg p-4 space-y-3">
+            <div className="space-y-3">
+              {creators.map((creator, index) => (
+                <div key={creator.id} className="border rounded-lg p-4 space-y-2">
                   <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <h3 className="font-medium">u/{creator.username}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        r/{creator.subreddit} • {creator.karma} karma
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
+                        #{index + 1}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-lg">u/{creator.username}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          r/{creator.subreddit}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge 
-                        variant={creator.engagementScore >= 80 ? "default" : 
-                               creator.engagementScore >= 50 ? "secondary" : "outline"}
+                    
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-primary">
+                        {sortBy === "karma" ? creator.karma.toLocaleString() : 
+                         sortBy === "engagement" ? creator.engagementScore : 
+                         creator.lastActive ? new Date(creator.lastActive).toLocaleDateString() : 'N/A'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {sortBy === "karma" ? "karma" : 
+                         sortBy === "engagement" ? "engagement" : 
+                         "last active"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 pt-2 border-t">
+                    <div className="text-center">
+                      <div className="font-medium">{creator.karma.toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">Karma</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium">{creator.engagementScore}</div>
+                      <div className="text-xs text-muted-foreground">Engagement</div>
+                    </div>
+                    <div className="text-center">
+                      <a
+                        href={creator.profileLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
                       >
-                        {getEngagementLevel(creator.engagementScore)}
-                      </Badge>
-                      <span className={`text-sm font-medium ${getEngagementColor(creator.engagementScore)}`}>
-                        {creator.engagementScore}
-                      </span>
+                        View Profile <ExternalLink className="h-3 w-3" />
+                      </a>
                     </div>
                   </div>
 
                   {creator.tags && creator.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {creator.tags.slice(0, 5).map((tag, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
+                    <div className="flex flex-wrap gap-1 pt-2">
+                      {creator.tags.slice(0, 4).map((tag, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
                           {tag}
                         </Badge>
                       ))}
-                      {creator.tags.length > 5 && (
+                      {creator.tags.length > 4 && (
                         <Badge variant="outline" className="text-xs">
-                          +{creator.tags.length - 5} more
+                          +{creator.tags.length - 4}
                         </Badge>
                       )}
                     </div>
                   )}
-
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-muted-foreground">
-                      Last activity: {creator.lastActive ? new Date(creator.lastActive).toLocaleDateString() : 'Unknown'}
-                    </div>
-                    <a
-                      href={creator.profileLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
-                    >
-                      View Profile <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
                 </div>
               ))}
             </div>
