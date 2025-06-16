@@ -109,16 +109,39 @@ export default function EnhancedSearch() {
     onSuccess: (data) => {
       if (data.success) {
         setSearchResult(data);
+        setExaSearchResult(null);
       }
     },
   });
 
+  // Exa-powered search mutation
+  const exaSearchMutation = useMutation({
+    mutationFn: async ({ query, subreddit }: { query: string; subreddit?: string }) => {
+      if (subreddit && subreddit !== 'all') {
+        return apiRequest(`/api/search/exa/subreddit`, 'POST', { subreddit, query, timeframe: 'month' });
+      } else {
+        return apiRequest(`/api/search/exa`, 'POST', { query, numResults: 30, timeframe: 'month' });
+      }
+    },
+    onSuccess: (data) => {
+      setExaSearchResult(data);
+      setSearchResult(null);
+    }
+  });
+
   const handleSearch = () => {
-    enhancedSearch.mutate({
-      subreddit,
-      query: query || undefined,
-      limit: 100
-    });
+    if (searchMode === 'exa') {
+      exaSearchMutation.mutate({
+        query: query || 'trending posts',
+        subreddit: subreddit === 'all' ? undefined : subreddit
+      });
+    } else {
+      enhancedSearch.mutate({
+        subreddit,
+        query: query || undefined,
+        limit: 100
+      });
+    }
   };
 
   return (
@@ -138,8 +161,31 @@ export default function EnhancedSearch() {
             Advanced Search
           </CardTitle>
           <CardDescription>
-            Search specific subreddits with optional query filters and AI analysis
+            Search Reddit with AI-powered semantic understanding using Exa.ai or traditional Reddit API
           </CardDescription>
+          
+          {/* Search Mode Toggle */}
+          <div className="flex items-center gap-2 mt-4">
+            <span className="text-sm font-medium">Search Mode:</span>
+            <div className="flex rounded-lg border p-1">
+              <Button
+                variant={searchMode === 'exa' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSearchMode('exa')}
+                className="text-xs"
+              >
+                🔍 Exa.ai (Semantic)
+              </Button>
+              <Button
+                variant={searchMode === 'reddit' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSearchMode('reddit')}
+                className="text-xs"
+              >
+                📡 Reddit API
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -263,7 +309,113 @@ export default function EnhancedSearch() {
         </Alert>
       )}
 
-      {/* Results Section */}
+      {/* Exa Search Results */}
+      {exaSearchResult && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Search className="h-5 w-5" />
+                Exa.ai Search Results
+                <Badge variant="secondary" className="ml-2">
+                  Semantic Search
+                </Badge>
+              </CardTitle>
+              <CardDescription>
+                Found {exaSearchResult.totalResults} results with AI-powered analysis for "{exaSearchResult.query}"
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">{exaSearchResult.totalResults}</div>
+                  <p className="text-sm text-muted-foreground">Total Results</p>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{exaSearchResult.insights.popularSubreddits.length}</div>
+                  <p className="text-sm text-muted-foreground">Subreddits</p>
+                </div>
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-600">{exaSearchResult.insights.topKeywords.length}</div>
+                  <p className="text-sm text-muted-foreground">Key Topics</p>
+                </div>
+              </div>
+
+              {/* AI Insights */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Top Keywords</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {exaSearchResult.insights.topKeywords.slice(0, 8).map((keyword, index) => (
+                        <Badge key={index} variant="outline">
+                          {keyword}
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Popular Communities</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {exaSearchResult.insights.popularSubreddits.map((sub, index) => (
+                        <Badge key={index} variant="secondary">
+                          r/{sub}
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Search Results */}
+              <div className="space-y-4">
+                {exaSearchResult.results.map((result, index) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <h3 className="font-medium text-sm leading-relaxed pr-4">
+                        {result.title}
+                      </h3>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <a
+                          href={result.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          View
+                        </a>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>u/{result.author}</span>
+                      <span>r/{result.subreddit}</span>
+                      <span>Score: {result.score.toFixed(3)}</span>
+                      <span>{new Date(result.publishedDate).toLocaleDateString()}</span>
+                    </div>
+
+                    {result.text && (
+                      <p className="text-sm text-gray-600 line-clamp-3">
+                        {result.text.substring(0, 200)}...
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Reddit API Results */}
       {searchResult && (
         <div className="space-y-6">
           {/* Summary Stats */}
