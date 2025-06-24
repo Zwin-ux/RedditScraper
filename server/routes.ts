@@ -1212,30 +1212,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let insights: string[] = [];
       let recommendations: string[] = [];
 
-      // Auto-detect subreddit queries and perform Exa searches
-      const subredditMatch = message.match(/r\/(\w+)|(\w+)\s*subreddit|about.*?(\w+)|tell.*about.*(machine\s*learning|data\s*science|artificial|python)/i);
-      const mentionedSubreddits = ['machine learning', 'machinelearning', 'datascience', 'data science', 'artificial', 'python', 'chatgpt', 'openai'];
-      const detectedSubreddit = subredditMatch ? 
-        (subredditMatch[1] || subredditMatch[2] || subredditMatch[3] || subredditMatch[4]) :
-        mentionedSubreddits.find(sub => message.toLowerCase().includes(sub));
+      // Enhanced Exa.ai integration for comprehensive subreddit analysis
+      const detectSubredditQuery = (msg: string) => {
+        const patterns = [
+          /r\/(\w+)/i,                                    // r/subreddit
+          /(\w+)\s*subreddit/i,                          // word subreddit
+          /about\s+(?:the\s+)?(\w+)(?:\s+subreddit)?/i,  // about word/subreddit
+          /tell.*about\s+(\w+)/i,                        // tell me about word
+          /what.*(?:is|are)\s+(\w+)/i,                   // what is word
+          /explore\s+(\w+)/i,                            // explore word
+          /find.*in\s+(\w+)/i                            // find in word
+        ];
+        
+        for (const pattern of patterns) {
+          const match = msg.match(pattern);
+          if (match) return match[1];
+        }
+        
+        // Check for topic mentions
+        const topicMapping: Record<string, string> = {
+          'machine learning': 'MachineLearning',
+          'data science': 'datascience', 
+          'artificial intelligence': 'artificial',
+          'programming': 'programming',
+          'python': 'Python',
+          'javascript': 'javascript',
+          'web development': 'webdev',
+          'startup': 'startups',
+          'entrepreneur': 'Entrepreneur',
+          'technology': 'technology',
+          'science': 'science'
+        };
+        
+        for (const [topic, subreddit] of Object.entries(topicMapping)) {
+          if (msg.toLowerCase().includes(topic)) return subreddit;
+        }
+        
+        return null;
+      };
 
+      const detectedSubreddit = detectSubredditQuery(message);
       const isSubredditQuery = detectedSubreddit || 
-                              message.toLowerCase().includes('subreddit') || 
-                              (message.toLowerCase().includes('about') && 
-                               (message.toLowerCase().includes('machine learning') || 
-                                message.toLowerCase().includes('data science')));
+                              message.toLowerCase().includes('subreddit') ||
+                              message.toLowerCase().includes('community') ||
+                              message.toLowerCase().includes('what is r/') ||
+                              message.toLowerCase().includes('explore');
 
       if (isSubredditQuery) {
         let targetSubreddit = detectedSubreddit || 'MachineLearning';
         
-        // Map common terms to actual subreddit names
+        // Enhanced subreddit mapping
         const subredditMapping: Record<string, string> = {
-          'machine learning': 'MachineLearning',
           'machinelearning': 'MachineLearning',
-          'data science': 'datascience',
           'datascience': 'datascience',
-          'artificial': 'artificial',
+          'artificial': 'artificial', 
+          'programming': 'programming',
           'python': 'Python',
+          'javascript': 'javascript',
+          'webdev': 'webdev',
+          'startups': 'startups',
+          'entrepreneur': 'Entrepreneur',
+          'technology': 'technology',
+          'science': 'science',
           'chatgpt': 'ChatGPT',
           'openai': 'OpenAI'
         };
@@ -1243,50 +1281,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
         targetSubreddit = subredditMapping[targetSubreddit.toLowerCase()] || targetSubreddit;
         
         try {
-          console.log(`Performing Exa mini-search for r/${targetSubreddit}`);
-          const exaResult = await exaSearchService.searchBySubreddit(targetSubreddit, 'community overview popular posts', 'month');
+          console.log(`Performing comprehensive Exa search for r/${targetSubreddit}`);
           
-          if (exaResult.results.length > 0) {
-            const keywords = exaResult.insights.topKeywords.slice(0, 8);
-            const popularSubs = exaResult.insights.popularSubreddits;
-            
-            responseData = `r/${targetSubreddit} Community Overview:\n\n` +
-              `Recent Activity: ${exaResult.totalResults} posts analyzed\n` +
-              `Popular Topics: ${keywords.join(', ')}\n\n` +
-              `Top Recent Posts:\n`;
+          // Perform multiple searches for comprehensive data
+          const [communitySearch, trendingSearch] = await Promise.allSettled([
+            exaSearchService.searchBySubreddit(targetSubreddit, 'community overview discussions', 'month'),
+            exaSearchService.searchRedditContent(`r/${targetSubreddit} trending popular posts`, { 
+              numResults: 15, 
+              startPublishedDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() 
+            })
+          ]);
 
-            exaResult.results.slice(0, 4).forEach((post, index) => {
-              responseData += `${index + 1}. "${post.title.substring(0, 80)}${post.title.length > 80 ? '...' : ''}"\n`;
-              responseData += `   by u/${post.author} • ${new Date(post.publishedDate).toLocaleDateString()}\n`;
+          let mainResult = null;
+          if (communitySearch.status === 'fulfilled' && communitySearch.value.results.length > 0) {
+            mainResult = communitySearch.value;
+          } else if (trendingSearch.status === 'fulfilled' && trendingSearch.value.results.length > 0) {
+            mainResult = trendingSearch.value;
+          }
+          
+          if (mainResult && mainResult.results.length > 0) {
+            const keywords = mainResult.insights.topKeywords.slice(0, 10);
+            const contentTypes = mainResult.insights.contentTypes;
+            const relatedSubs = mainResult.insights.popularSubreddits.filter(sub => sub !== targetSubreddit);
+            
+            responseData = `🔍 r/${targetSubreddit} Deep Dive:\n\n` +
+              `📊 Community Stats:\n` +
+              `• ${mainResult.totalResults} recent posts analyzed\n` +
+              `• Active discussions on: ${keywords.slice(0, 6).join(', ')}\n\n`;
+
+            if (contentTypes.length > 0) {
+              responseData += `📝 Content Types:\n${contentTypes.map(type => `• ${type}`).join('\n')}\n\n`;
+            }
+
+            responseData += `🔥 Recent Popular Posts:\n`;
+            mainResult.results.slice(0, 5).forEach((post, index) => {
+              const truncatedTitle = post.title.length > 70 ? post.title.substring(0, 70) + '...' : post.title;
+              responseData += `${index + 1}. "${truncatedTitle}"\n`;
+              responseData += `   👤 u/${post.author} • ⬆️ ${post.score.toFixed(2)} • 📅 ${new Date(post.publishedDate).toLocaleDateString()}\n`;
             });
 
+            if (relatedSubs.length > 0) {
+              responseData += `\n🔗 Related Communities: ${relatedSubs.slice(0, 3).map(sub => `r/${sub}`).join(', ')}`;
+            }
+
             insights = [
-              `Live data from r/${targetSubreddit}`,
-              `Top keywords: ${keywords.slice(0, 4).join(', ')}`,
-              `${exaResult.totalResults} authentic posts found`
+              `Live analysis of r/${targetSubreddit} using semantic search`,
+              `${mainResult.totalResults} authentic posts from the past month`,
+              `Key topics: ${keywords.slice(0, 5).join(', ')}`,
+              contentTypes.length > 0 ? `Popular content: ${contentTypes[0]}` : 'Active community discussions'
             ];
 
             recommendations = [
-              "Use Enhanced Search for deeper exploration",
-              "Try semantic search mode for specific topics",
-              "Check Creator Analytics for top contributors"
+              `Use Enhanced Search to explore specific topics in r/${targetSubreddit}`,
+              "Try semantic search mode for deeper topic exploration", 
+              "Check Creator Analytics to find top contributors in this community",
+              relatedSubs.length > 0 ? `Explore related communities like r/${relatedSubs[0]}` : "Search for specific keywords within this community"
             ];
           } else {
-            responseData = `r/${targetSubreddit} is an active community. Use Enhanced Search with semantic mode to explore current discussions and find trending posts.`;
+            // Fallback with helpful guidance
+            responseData = `r/${targetSubreddit} Community Guide:\n\n` +
+              `This is an active Reddit community focused on ${targetSubreddit.toLowerCase().replace(/([A-Z])/g, ' $1').trim()}. ` +
+              `While I couldn't retrieve recent posts right now, here's how to explore it:\n\n` +
+              `🔍 Search Strategies:\n` +
+              `• Use Enhanced Search with semantic mode\n` +
+              `• Try specific keywords related to your interests\n` +
+              `• Look for weekly discussion threads\n` +
+              `• Check pinned posts for community guidelines\n\n` +
+              `💡 Pro Tips:\n` +
+              `• Sort by "Top" for best content\n` +
+              `• Check "Hot" for current trending posts\n` +
+              `• Look at user flairs for expertise levels`;
             
             recommendations = [
-              "Try Enhanced Search with the subreddit name",
-              "Use semantic search for better results",
-              "Search for specific topics within the community"
+              `Use Enhanced Search to explore r/${targetSubreddit} in real-time`,
+              "Try searching for specific topics you're interested in",
+              "Check the community rules and guidelines first",
+              "Look for weekly threads or recurring discussions"
             ];
           }
         } catch (error) {
-          console.error('Exa subreddit search failed:', error);
-          responseData = `r/${targetSubreddit} is a Reddit community. Use Enhanced Search to explore current posts and discussions with real-time data.`;
+          console.error('Comprehensive Exa search failed:', error);
+          responseData = `r/${targetSubreddit} is an active Reddit community. Use Enhanced Search with semantic mode to explore current discussions and discover trending content.`;
           
           recommendations = [
-            "Use Enhanced Search for live subreddit data",
-            "Try different search terms for better results"
+            "Use Enhanced Search for live community exploration",
+            "Try semantic search mode for better understanding",
+            "Search for specific topics you're interested in"
           ];
         }
 

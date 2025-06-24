@@ -153,6 +153,39 @@ export function DashboardChatbot({
         {/* Chat Content */}
         {!isCollapsed && (
           <>
+            {/* Quick Actions */}
+            {messages.length === 1 && (
+              <div className="p-3 bg-blue-50 border-b border-gray-200">
+                <p className="text-xs font-medium text-gray-700 mb-2">Quick Searches:</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    "r/MachineLearning",
+                    "r/datascience", 
+                    "r/Python",
+                    "r/artificial"
+                  ].map((query) => (
+                    <button
+                      key={query}
+                      onClick={() => {
+                        setInput(query);
+                        const userMessage: ChatMessage = {
+                          id: Date.now().toString(),
+                          type: 'user',
+                          content: query,
+                          timestamp: new Date()
+                        };
+                        setMessages(prev => [...prev, userMessage]);
+                        defaultChatMutation.mutate(query);
+                      }}
+                      className="text-xs py-1.5 px-2 bg-white border border-gray-300 rounded hover:bg-gray-50 text-left"
+                    >
+                      {query}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Messages */}
             <ScrollArea className="h-80 p-4 bg-white">
               <div className="space-y-4">
