@@ -5,6 +5,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().default('5000'),
   REDDIT_API_KEY: z.string().optional(),
+  REDDIT_USERNAME: z.string().optional(),
   SERPAPI_KEY: z.string().optional(),
   REDIS_URL: z.string().optional(),
   CACHE_TTL: z.string().default('3600'), // 1 hour in seconds
@@ -30,12 +31,11 @@ export const config = {
   
   // API Keys
   redditApiKey: envValidation.data.REDDIT_API_KEY,
+  redditUsername: envValidation.data.REDDIT_USERNAME,
   serpApiKey: envValidation.data.SERPAPI_KEY,
   
   // Redis
   redisUrl: envValidation.data.REDIS_URL,
-  
-  // Rate limiting
   rateLimit: {
     windowMs: parseInt(envValidation.data.RATE_LIMIT_WINDOW, 10),
     max: parseInt(envValidation.data.RATE_LIMIT_MAX, 10),

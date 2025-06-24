@@ -9,7 +9,21 @@ import {
   parseUsername,
   getRedditErrorMessage
 } from '../utils/reddit-utils.js';
-import { ExternalServiceError, RateLimitError, ValidationError } from '../utils/errors.js';
+
+// Interface for Reddit user profile data
+export interface RedditUserProfile {
+  id: string;
+  username: string;
+  createdUtc: number;
+  linkKarma: number;
+  commentKarma: number;
+  isGold: boolean;
+  isMod: boolean;
+  verified: boolean;
+  hasVerifiedEmail: boolean;
+  iconImg: string | null;
+}
+import { ExternalServiceError, RateLimitError } from '../utils/errors.js';
 
 // Rate limiter: 30 requests per minute (Reddit's limit)
 const redditLimiter = new RateLimiter({
@@ -65,7 +79,8 @@ export interface ScraperOptions {
   [key: string]: any;
 }
 
-export type ScraperResult<T = any> = {
+// Define the shape of a successful result
+export interface ScraperSuccessResult<T> {
   data: T[];
   metadata: {
     total: number;
@@ -75,12 +90,49 @@ export type ScraperResult<T = any> = {
     executionTime: number;
     cacheHit: boolean;
   };
-  error?: {
+  error?: never; // Ensure error is not present in success case
+}
+
+// Define the shape of an error result
+export interface ScraperErrorResult {
+  error: {
     message: string;
     code?: string;
     details?: unknown;
   };
-};
+  data: [];
+  metadata: {
+    total: 0;
+    after: null;
+    before: null;
+    pageSize: 0;
+    executionTime: 0;
+    cacheHit: false;
+  };
+}
+
+// Union type for the result
+export type ScraperResult<T> = ScraperSuccessResult<T> | ScraperErrorResult;
+
+// Helper function to create an error result
+function createErrorResult(error: { message: string; code?: string; details?: unknown }): ScraperErrorResult {
+  return {
+    error: {
+      message: error.message,
+      code: error.code,
+      details: error.details
+    },
+    data: [],
+    metadata: {
+      total: 0,
+      after: null,
+      before: null,
+      pageSize: 0,
+      executionTime: 0,
+      cacheHit: false,
+    }
+  };
+}
 
 export class RedditScraper {
   private userAgent: string;
@@ -92,10 +144,18 @@ export class RedditScraper {
       : 'RedditScraper/1.0';
   }
   
-  private async makeRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
+  private async handleRateLimit<T>(fn: () => Promise<T>): Promise<T> {
     try {
       await redditLimiter.removeTokens(1);
-      
+      return await fn();
+    } catch (error) {
+      if (error instanceof RateLimitError) throw error;
+      throw new ExternalServiceError('Reddit API', getRedditErrorMessage(error as Error));
+    }
+  }
+
+  private async makeRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
+    const fetchWithRetry = async (): Promise<T> => {
       const response = await fetch(url, {
         ...options,
         headers: {
@@ -118,25 +178,26 @@ export class RedditScraper {
         );
       }
       
-      return response.json();
-    } catch (error) {
-      if (error instanceof RateLimitError) throw error;
-      throw new ExternalServiceError('Reddit API', getRedditErrorMessage(error as Error));
-    }
+      return response.json() as Promise<T>;
+    };
+    
+    return this.handleRateLimit(fetchWithRetry);
   }
 
   /**
    * Search for posts in a subreddit
    */
-  async searchPosts(
+  public async searchPosts(
     subreddit: string,
     options: ScraperOptions = {}
   ): Promise<ScraperResult<RedditPost>> {
     const startTime = Date.now();
     const validatedSubreddit = parseSubreddit(subreddit);
-    
     if (!validatedSubreddit) {
-      throw new ValidationError(`Invalid subreddit: ${subreddit}`);
+      return createErrorResult({
+        message: `Invalid subreddit name: ${subreddit}`,
+        code: 'INVALID_SUBREDDIT',
+      });
     }
     
     const {
@@ -151,15 +212,36 @@ export class RedditScraper {
     
     // Check cache if not forcing refresh
     if (!forceRefresh) {
-      const cached = await subredditCache.get<ScraperResult<RedditPost>>(cacheKey);
-      if (cached) {
-        return {
-          ...cached,
-          metadata: {
-            ...cached.metadata,
-            cacheHit: true,
-          },
+      const cached = await subredditCache.get<ScraperSuccessResult<RedditPost>>(cacheKey);
+      if (cached && typeof cached === 'object' && 'data' in cached && Array.isArray(cached.data)) {
+        const defaultMetadata = {
+          total: 0,
+          after: null as string | null,
+          before: null as string | null,
+          pageSize: 0,
+          executionTime: 0,
+          cacheHit: false,
         };
+        
+        const cachedMetadata = (cached as any).metadata || defaultMetadata;
+        const safeMetadata = {
+          total: typeof cachedMetadata.total === 'number' ? cachedMetadata.total : defaultMetadata.total,
+          after: cachedMetadata.after === null || typeof cachedMetadata.after === 'string' 
+            ? cachedMetadata.after 
+            : defaultMetadata.after,
+          before: cachedMetadata.before === null || typeof cachedMetadata.before === 'string' 
+            ? cachedMetadata.before 
+            : defaultMetadata.before,
+          pageSize: typeof cachedMetadata.pageSize === 'number' ? cachedMetadata.pageSize : defaultMetadata.pageSize,
+          executionTime: 0,
+          cacheHit: true,
+        };
+        
+        const result: ScraperSuccessResult<RedditPost> = {
+          data: cached.data,
+          metadata: safeMetadata,
+        };
+        return result;
       }
     }
     
@@ -175,21 +257,36 @@ export class RedditScraper {
         }
       });
       
-      const data = await this.makeRequest<{ data: { children: Array<{ data: RedditPost }> } }>(
-        url.toString()
-      );
+      const response = await this.makeRequest<{ 
+        data: { 
+          children: Array<{ data: RedditPost }>;
+          after: string | null;
+          before: string | null;
+        } 
+      }>(url.toString());
       
-      const posts = data.data.children.map(child => child.data);
-      const result: ScraperResult<RedditPost> = {
+      // Ensure response has the expected structure
+      if (!response?.data?.children) {
+        return createErrorResult({
+          message: 'Invalid response from Reddit API',
+          code: 'INVALID_RESPONSE',
+          details: response
+        });
+      }
+      
+      const posts = response.data.children.map(child => child.data);
+      const metadata = {
+        total: posts.length,
+        after: response.data.after || null,
+        before: response.data.before || null,
+        pageSize: limit,
+        executionTime: Date.now() - startTime,
+        cacheHit: false,
+      };
+      
+      const result: ScraperSuccessResult<RedditPost> = {
         data: posts,
-        metadata: {
-          total: posts.length,
-          after: null, // Would come from pagination
-          before: null, // Would come from pagination
-          pageSize: limit,
-          executionTime: Date.now() - startTime,
-          cacheHit: false,
-        },
+        metadata
       };
       
       // Cache the result
@@ -204,36 +301,80 @@ export class RedditScraper {
 
   /**
    * Get user profile information
+   * @param username - The Reddit username to fetch profile for
+   * @param options - Options for the request
+   * @returns A promise that resolves to the user profile or an error
    */
   async getUserProfile(
     username: string,
     options: { forceRefresh?: boolean } = {}
-  ) {
+  ): Promise<ScraperResult<RedditUserProfile>> {
+    const startTime = Date.now();
     const validatedUsername = parseUsername(username);
-    
     if (!validatedUsername) {
-      throw new ValidationError(`Invalid username: ${username}`);
+      return createErrorResult({
+        message: `Invalid username: ${username}`,
+        code: 'INVALID_USERNAME'
+      });
     }
-    
-    const cacheKey = `user:${validatedUsername}`;
+
+    const cacheKey = `user_profile:${validatedUsername}`;
     
     // Check cache if not forcing refresh
     if (!options.forceRefresh) {
-      const cached = await userProfileCache.get<any>(cacheKey);
-      if (cached) {
-        return { ...cached, _cached: true };
+      const cached = await userProfileCache.get<RedditUserProfile>(cacheKey);
+      if (cached && typeof cached === 'object' && 'id' in cached && 'username' in cached) {
+        const profile = cached as RedditUserProfile;
+        const result: ScraperSuccessResult<RedditUserProfile> = {
+          data: [profile],
+          metadata: {
+            total: 1,
+            after: null,
+            before: null,
+            pageSize: 1,
+            executionTime: 0,
+            cacheHit: true,
+          }
+        };
+        return result;
       }
     }
-    
+
     try {
       const url = `${this.baseUrl}/user/${validatedUsername}/about.json`;
-      const data = await this.makeRequest<{ data: any }>(url);
+      const response = await this.makeRequest<{ data: RedditUserProfile }>(url);
+      const executionTime = Date.now() - startTime;
       
-      if (!data || !data.data) {
-        throw new Error('Invalid user profile data');
+      if (!response || !response.data) {
+        return createErrorResult({
+          message: 'Invalid user profile data',
+          code: 'INVALID_RESPONSE',
+        });
       }
       
-      const profile = {
+      const profile = response.data;
+      
+      // Cache the profile
+      await userProfileCache.set(cacheKey, profile);
+      
+      const result: ScraperSuccessResult<RedditUserProfile> = {
+        data: [profile],
+        metadata: {
+          total: 1,
+          after: null,
+          before: null,
+          pageSize: 1,
+          executionTime,
+          cacheHit: false,
+        }
+      };
+      
+      return result;
+          code: 'INVALID_RESPONSE'
+        });
+      }
+      
+      const profile: RedditUserProfile = {
         id: data.data.id,
         username: data.data.name,
         createdUtc: data.data.created_utc,
@@ -249,28 +390,42 @@ export class RedditScraper {
       // Cache the profile
       await userProfileCache.set(cacheKey, profile, CACHE_TTL.USER_PROFILE);
       
-      return profile;
+      return {
+        data: [profile],
+        metadata: {
+          total: 1,
+          after: null,
+          before: null,
+          pageSize: 1,
+          executionTime,
+          cacheHit: false,
+        }
+      };
     } catch (error) {
       console.error(`Error fetching profile for u/${validatedUsername}:`, error);
       
-      // Return a partial profile if available in the error
-      if (error instanceof ExternalServiceError && error.details?.data) {
-        return {
-          username: validatedUsername,
-          error: error.message,
-          ...error.details.data,
-        };
+      if (error instanceof ExternalServiceError) {
+        return createErrorResult({
+          message: error.message,
+          code: error.code || 'EXTERNAL_SERVICE_ERROR',
+          details: error.details
+        });
       }
       
-      throw error;
+      return createErrorResult({
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
+        code: 'FETCH_ERROR',
+        details: error
+      });
     }
   }
-}
 
   /**
    * Get top posts from a subreddit
+   * @param subreddit - The subreddit name to fetch top posts from
+   * @param options - Additional options for the request
    */
-  async getTopPosts(
+  public async getTopPosts(
     subreddit: string,
     options: Omit<ScraperOptions, 'sort'> = {}
   ): Promise<ScraperResult<RedditPost>> {
@@ -279,8 +434,10 @@ export class RedditScraper {
   
   /**
    * Get hot posts from a subreddit
+   * @param subreddit - The subreddit name to fetch hot posts from
+   * @param options - Additional options for the request
    */
-  async getHotPosts(
+  public async getHotPosts(
     subreddit: string,
     options: Omit<ScraperOptions, 'sort'> = {}
   ): Promise<ScraperResult<RedditPost>> {
@@ -289,37 +446,143 @@ export class RedditScraper {
   
   /**
    * Get user's submitted posts
+   * @param username - The Reddit username to fetch posts for
+   * @param options - Additional options for the request
    */
-  async getUserPosts(
+  public async getUserPosts(
     username: string,
-    options: Omit<ScraperOptions, 'sort'> = {}
+    options: Omit<ScraperOptions, 'sort'> & { forceRefresh?: boolean } = {}
   ): Promise<ScraperResult<RedditPost>> {
-    const validatedUsername = parseUsername(username);
-    if (!validatedUsername) {
-      throw new ValidationError(`Invalid username: ${username}`);
+    try {
+      const validatedUsername = parseUsername(username);
+      if (!validatedUsername) {
+        return {
+          error: { message: `Invalid username: ${username}`, code: 'INVALID_USERNAME' },
+          data: [],
+          metadata: {
+            total: 0,
+            after: null,
+            before: null,
+            pageSize: 0,
+            executionTime: 0,
+            cacheHit: false,
+          },
+        };
+      }
+      
+      const cacheKey = `user_posts:${validatedUsername}:${JSON.stringify(options)}`;
+      
+      // Define interface for cached data structure
+      interface CachedPosts {
+        data: RedditPost[];
+        metadata: {
+          total: number;
+          after: string | null;
+          before: string | null;
+          pageSize: number;
+          executionTime: number;
+          cacheHit: boolean;
+        };
+      }
+
+      // Helper function to validate cached data
+      const isValidCachedPosts = (data: unknown): data is CachedPosts => {
+        if (!data || typeof data !== 'object') return false;
+        
+        const d = data as Record<string, unknown>;
+        const metadata = d.metadata as Record<string, unknown> | null | undefined;
+        
+        return (
+          Array.isArray(d.data) &&
+          metadata !== null &&
+          typeof metadata === 'object' &&
+          metadata !== undefined &&
+          'total' in metadata &&
+          'pageSize' in metadata &&
+          typeof metadata.total === 'number' &&
+          typeof metadata.pageSize === 'number' &&
+          (metadata.after === null || typeof metadata.after === 'string') &&
+          (metadata.before === null || typeof metadata.before === 'string') &&
+          typeof metadata.executionTime === 'number' &&
+          typeof metadata.cacheHit === 'boolean'
+        );
+      };
+
+      // Check cache if not forcing refresh
+      if (!options.forceRefresh) {
+        const cached = await subredditCache.get<unknown>(cacheKey);
+        if (cached && isValidCachedPosts(cached)) {
+          return {
+            data: cached.data,
+            metadata: {
+              total: cached.metadata.total || 0,
+              after: cached.metadata.after || null,
+              before: cached.metadata.before || null,
+              pageSize: cached.metadata.pageSize || 0,
+              executionTime: 0, // Reset execution time for cached results
+              cacheHit: true,
+            },
+          };
+        }
+      }
+      
+      const url = `${this.baseUrl}/user/${validatedUsername}/submitted.json`;
+      const params = new URLSearchParams({
+        limit: String(options.limit || 25),
+        ...(options.time && { t: options.time }),
+      });
+      
+      const startTime = Date.now();
+      const response = await this.makeRequest<{ 
+        data: { 
+          children: Array<{ data: RedditPost }>;
+          after: string | null;
+          before: string | null;
+        } 
+      }>(`${url}?${params}`);
+      
+      const executionTime = Date.now() - startTime;
+      
+      const result: ScraperSuccessResult<RedditPost> = {
+        data: response.data.children.map(child => ({
+          ...formatRedditPost(child.data),
+          score: child.data.score,
+          num_comments: child.data.num_comments,
+          created_utc: child.data.created_utc
+        })),
+        metadata: {
+          total: response.data.children.length,
+          after: response.data.after || null,
+          before: response.data.before || null,
+          pageSize: options.limit || 25,
+          executionTime,
+          cacheHit: false,
+        },
+      };
+      
+      // Cache the result
+      await subredditCache.set(cacheKey, result, CACHE_TTL.SUBREDDIT);
+      
+      return result;
+    } catch (error) {
+      console.error(`Error fetching posts for user ${username}:`, error);
+      return {
+        error: {
+          message: error instanceof Error ? error.message : 'Unknown error occurred',
+          code: 'FETCH_ERROR',
+          details: error
+        },
+        data: [],
+        metadata: {
+          total: 0,
+          after: null,
+          before: null,
+          pageSize: 0,
+          executionTime: 0,
+          cacheHit: false,
+        },
+      };
     }
-    
-    const url = `${this.baseUrl}/user/${validatedUsername}/submitted.json`;
-    const params = new URLSearchParams({
-      limit: String(options.limit || 25),
-      ...(options.time && { t: options.time }),
-    });
-    
-    const data = await this.makeRequest<{ data: { children: Array<{ data: RedditPost }> } }>(
-      `${url}?${params}`
-    );
-    
-    return {
-      data: data.data.children.map(child => formatRedditPost(child.data)),
-      metadata: {
-        total: data.data.children.length,
-        after: data.data.after || null,
-        before: data.data.before || null,
-        pageSize: options.limit || 25,
-        executionTime: 0, // Would be calculated in a real implementation
-        cacheHit: false,
-      },
-    };
   }
 }
 
