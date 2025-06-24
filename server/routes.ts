@@ -1,5 +1,5 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
+import type { Express, Request, Response } from "express";
+import { type Server } from "http";
 import { storage } from "./storage";
 import { crawlAndProcessSubreddit, initializeSubreddits } from "./reddit";
 import { comprehensiveSubredditAnalysis, searchRedditPosts } from "./serpapi";
@@ -17,12 +17,12 @@ import { rateLimitedScraper } from "./rate-limited-scraper";
 import { reliableScraper } from "./reliable-scraper";
 import { z } from "zod";
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express): Promise<void> {
   // Initialize subreddits on startup
   await initializeSubreddits();
   
   // Comprehensive r/datascience analysis endpoint - SerpAPI only (no OpenAI)
-  app.post("/api/analyze-datascience", async (req, res) => {
+  app.post("/api/analyze-datascience", async (req: Request, res: Response) => {
     try {
       console.log("Starting r/datascience analysis with SerpAPI...");
       
@@ -129,7 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Fast subreddit scraping endpoint for UI button
-  app.post("/api/scrape-subreddit", async (req, res) => {
+  app.post("/api/scrape-subreddit", async (req: Request, res: Response) => {
     const { subreddit } = req.body;
     
     if (!subreddit) {
@@ -270,7 +270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Enhanced r/datascience analysis with Google Gemini
-  app.post("/api/scrape-datascience-now", async (req, res) => {
+  app.post("/api/scrape-datascience-now", async (req: Request, res: Response) => {
     try {
       console.log("Analyzing r/datascience with direct web scraping + Google Gemini...");
       
@@ -378,7 +378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Clear dummy data and reset database for real data
-  app.post("/api/reset-database", async (req, res) => {
+  app.post("/api/reset-database", async (req: Request, res: Response) => {
     try {
       // This would clear existing dummy data
       // In a real implementation, you'd add database clearing logic here
@@ -397,7 +397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Real-time search endpoint for specific r/datascience content
-  app.post("/api/search-datascience", async (req, res) => {
+  app.post("/api/search-datascience", async (req: Request, res: Response) => {
     try {
       const { query, limit = 50 } = req.body;
       
@@ -431,7 +431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Dashboard stats endpoint
-  app.get("/api/dashboard/stats", async (req, res) => {
+  app.get("/api/dashboard/stats", async (req: Request, res: Response) => {
     try {
       const stats = await storage.getDashboardStats();
       res.json(stats);
@@ -442,7 +442,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get creators with filtering
-  app.get("/api/creators", async (req, res) => {
+  app.get("/api/creators", async (req: Request, res: Response) => {
     try {
       const { subreddit, tag, engagementLevel, search, page = "1", limit = "20" } = req.query;
       
@@ -475,7 +475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single creator with details
-  app.get("/api/creators/:id", async (req, res) => {
+  app.get("/api/creators/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
@@ -495,7 +495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get subreddits
-  app.get("/api/subreddits", async (req, res) => {
+  app.get("/api/subreddits", async (req: Request, res: Response) => {
     try {
       const subreddits = await storage.getSubreddits();
       res.json(subreddits);
@@ -506,7 +506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Trigger manual crawl
-  app.post("/api/crawl", async (req, res) => {
+  app.post("/api/crawl", async (req: Request, res: Response) => {
     try {
       const schema = z.object({
         subreddit: z.string().optional(),
@@ -546,7 +546,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get crawl logs
-  app.get("/api/crawl/logs", async (req, res) => {
+  app.get("/api/crawl/logs", async (req: Request, res: Response) => {
     try {
       const { limit = "10" } = req.query;
       const logs = await storage.getRecentCrawlLogs(parseInt(limit as string, 10));
@@ -558,7 +558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Export creators
-  app.get("/api/export/creators", async (req, res) => {
+  app.get("/api/export/creators", async (req: Request, res: Response) => {
     try {
       const { format = "json" } = req.query;
       const creators = await storage.getCreators({ limit: 10000 });
@@ -595,6 +595,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const httpServer = createServer(app);
-  return httpServer;
+
 }

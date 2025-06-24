@@ -52,7 +52,6 @@ export async function searchRedditPosts(subreddit: string, query?: string, limit
     if (data.organic_results) {
       for (const result of data.organic_results) {
         if (result.link && result.link.includes(`reddit.com/r/${subreddit}`)) {
-          // Extract Reddit-specific data from the result
           const post: SerpRedditPost = {
             title: result.title || '',
             link: result.link,
@@ -60,26 +59,17 @@ export async function searchRedditPosts(subreddit: string, query?: string, limit
             date: result.date || new Date().toISOString(),
             subreddit: subreddit,
           };
-
-          // Try to extract additional metadata from the link or snippet
           if (result.snippet) {
-            // Extract upvotes if available in snippet
             const upvoteMatch = result.snippet.match(/(\d+)\s*upvotes?/i);
             if (upvoteMatch) {
               post.upvotes = parseInt(upvoteMatch[1]);
             }
-
-            // Extract comment count if available
             const commentMatch = result.snippet.match(/(\d+)\s*comments?/i);
             if (commentMatch) {
               post.comments = parseInt(commentMatch[1]);
             }
           }
-
-          // Extract real Reddit username from snippets and titles
           let author = null;
-          
-          // Search for author patterns in snippet and title
           const textToSearch = `${result.snippet || ''} ${result.title || ''}`;
           const authorPatterns = [
             /submitted.*?by\s+u\/([a-zA-Z0-9_-]+)/i,
@@ -97,12 +87,9 @@ export async function searchRedditPosts(subreddit: string, query?: string, limit
               break;
             }
           }
-          
-          // Only include posts with real usernames found in text
           if (!author) {
             continue; // Skip posts without extractable real usernames
           }
-          
           post.author = author;
 
           posts.push(post);
@@ -208,7 +195,8 @@ export async function comprehensiveSubredditAnalysis(subreddit: string): Promise
       // Add delay to respect rate limits
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (error) {
-      console.error(`Failed to search for "${query}" in r/${subreddit}:`, error);
+      console.error(`Failed comprehensive analysis for r/${subreddit}:`, error);
+      throw error;
     }
   }
 
