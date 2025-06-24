@@ -18,6 +18,7 @@ export const creators = pgTable("creators", {
   engagementScore: integer("engagement_score").notNull().default(0),
   tags: text("tags").array().default(sql`'{}'`),
   profileLink: text("profile_link").notNull(),
+  topPostLinks: text("top_post_links").array().default(sql`'{}'`),
   lastActive: timestamp("last_active"),
   postsCount: integer("posts_count").default(0),
   commentsCount: integer("comments_count").default(0),

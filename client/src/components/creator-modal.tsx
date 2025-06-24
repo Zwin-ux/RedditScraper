@@ -65,6 +65,12 @@ export function CreatorModal({ creatorId, open, onOpenChange }: CreatorModalProp
     enabled: !!creatorId && open,
   });
 
+  const { data: posts = [], isLoading: postsLoading } = useQuery({
+    queryKey: ['/api/creators', creatorId, 'posts'],
+    queryFn: () => creatorId ? api.getCreatorPosts(creatorId, 10) : [],
+    enabled: !!creatorId && open,
+  });
+
   if (!creator && !isLoading) {
     return null;
   }
@@ -141,27 +147,81 @@ export function CreatorModal({ creatorId, open, onOpenChange }: CreatorModalProp
               </div>
             )}
 
-            {/* Recent Activity */}
-            {creator.recentPosts && creator.recentPosts.length > 0 && (
+            {/* Top Posts */}
+            {creator.topPostLinks && creator.topPostLinks.length > 0 && (
               <div>
-                <h5 className="text-sm font-medium text-slate-700 mb-3">Recent Activity</h5>
-                <div className="space-y-3">
-                  {creator.recentPosts.slice(0, 5).map((post) => (
-                    <div key={post.id} className="flex items-start space-x-3">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-900 font-medium truncate">
-                          Posted: "{post.title}"
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {post.subreddit} • {new Date(post.createdAt).toLocaleDateString()} • {post.upvotes} upvotes
-                        </p>
-                      </div>
-                    </div>
+                <h5 className="text-sm font-medium text-slate-700 mb-3 flex items-center">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Top Reddit Posts
+                </h5>
+                <div className="space-y-2">
+                  {creator.topPostLinks.map((link, index) => (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start text-left"
+                      onClick={() => window.open(link, '_blank')}
+                    >
+                      <ExternalLink className="w-3 h-3 mr-2" />
+                      <span className="truncate">Top Post #{index + 1}</span>
+                    </Button>
                   ))}
                 </div>
               </div>
             )}
+
+            {/* Recent Posts */}
+            <div>
+              <h5 className="text-sm font-medium text-slate-700 mb-3 flex items-center">
+                <FileText className="w-4 h-4 mr-2" />
+                Recent Reddit Posts
+              </h5>
+              {postsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="animate-pulse p-3 border border-slate-200 rounded-lg">
+                      <div className="h-4 bg-slate-200 rounded w-3/4 mb-2"></div>
+                      <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : posts.length > 0 ? (
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  {posts.map((post) => (
+                    <div 
+                      key={post.id} 
+                      className="p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+                      onClick={() => window.open(post.redditUrl, '_blank')}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h6 className="text-sm font-medium text-slate-900 mb-1 line-clamp-2">
+                            {post.title}
+                          </h6>
+                          <div className="flex items-center space-x-3 text-xs text-slate-500">
+                            <span className="flex items-center">
+                              <MessageSquare className="w-3 h-3 mr-1" />
+                              {post.upvotes.toLocaleString()} upvotes
+                            </span>
+                            <span>r/{post.subreddit}</span>
+                            <span>{post.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'Unknown date'}</span>
+                          </div>
+                          {post.content && (
+                            <p className="text-xs text-slate-600 mt-2 line-clamp-2">
+                              {post.content.substring(0, 150)}...
+                            </p>
+                          )}
+                        </div>
+                        <ExternalLink className="w-4 h-4 text-slate-400 ml-2 flex-shrink-0" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500 italic">No posts found for this creator.</p>
+              )}
+            </div>
 
             {/* Actions */}
             <div className="flex justify-between pt-4 border-t border-slate-200">

@@ -4,7 +4,7 @@ import type { Creator, DashboardStats, CreatorWithRecentActivity, Subreddit, Cra
 export const api = {
   // Dashboard
   getDashboardStats: async (): Promise<DashboardStats> => {
-    const response = await apiRequest("GET", "/api/dashboard/stats");
+    const response = await apiRequest("/api/dashboard/stats", "GET");
     return response.json();
   },
 
@@ -27,41 +27,46 @@ export const api = {
     }
     
     const url = `/api/creators${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
-    const response = await apiRequest("GET", url);
+    const response = await apiRequest(url, "GET");
     return response.json();
   },
 
   getCreator: async (id: number): Promise<CreatorWithRecentActivity> => {
-    const response = await apiRequest("GET", `/api/creators/${id}`);
+    const response = await apiRequest(`/api/creators/${id}`, "GET");
+    return response.json();
+  },
+
+  getCreatorPosts: async (creatorId: number, limit = 10) => {
+    const response = await apiRequest(`/api/creators/${creatorId}/posts?limit=${limit}`, "GET");
     return response.json();
   },
 
   // Subreddits
   getSubreddits: async (): Promise<Subreddit[]> => {
-    const response = await apiRequest("GET", "/api/subreddits");
+    const response = await apiRequest("/api/subreddits", "GET");
     return response.json();
   },
 
   // Scraping
   scrapeSubreddit: async (subreddit: string) => {
-    const response = await apiRequest("POST", "/api/scrape-subreddit", { subreddit });
+    const response = await apiRequest("/api/scrape-subreddit-fixed", "POST", { subreddit });
     return response.json();
   },
 
   // Crawling
   startCrawl: async (data: { subreddit?: string; all?: boolean }) => {
-    const response = await apiRequest("POST", "/api/crawl", data);
+    const response = await apiRequest("/api/crawl", "POST", data);
     return response.json();
   },
 
   getCrawlLogs: async (limit = 10): Promise<CrawlLog[]> => {
-    const response = await apiRequest("GET", `/api/crawl/logs?limit=${limit}`);
+    const response = await apiRequest(`/api/crawl/logs?limit=${limit}`, "GET");
     return response.json();
   },
 
   // Export
   exportCreators: async (format: 'json' | 'csv' = 'json') => {
-    const response = await apiRequest("GET", `/api/export/creators?format=${format}`);
+    const response = await apiRequest(`/api/export/creators?format=${format}`, "GET");
     if (format === 'csv') {
       return response.text();
     }

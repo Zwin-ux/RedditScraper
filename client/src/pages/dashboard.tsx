@@ -7,9 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Users, TrendingUp, Radio, BarChart3, Search, RefreshCw, Download, Eye, ExternalLink } from "lucide-react";
+import { Users, TrendingUp, Radio, BarChart3, Search, RefreshCw, Download, Eye, ExternalLink, Workflow } from "lucide-react";
 import { SiReddit } from "react-icons/si";
+import { Link } from "wouter";
 import { CreatorModal } from "@/components/creator-modal";
+import { SubredditModal } from "@/components/subreddit-modal";
+import { SubredditSearch } from "@/components/subreddit-search";
 import { api } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +21,9 @@ import type { Creator } from "@shared/schema";
 export default function Dashboard() {
   const [selectedCreatorId, setSelectedCreatorId] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [subredditModalOpen, setSubredditModalOpen] = useState(false);
+  const [selectedSubreddit, setSelectedSubreddit] = useState<string>('');
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [subredditInput, setSubredditInput] = useState('');
   const [filters, setFilters] = useState({
     subreddit: 'all',
@@ -121,6 +127,11 @@ export default function Dashboard() {
     setModalOpen(true);
   };
 
+  const handleViewSubreddit = (subredditName: string) => {
+    setSelectedSubreddit(subredditName);
+    setSubredditModalOpen(true);
+  };
+
   const getEngagementColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
     if (score >= 50) return 'text-yellow-600';
@@ -192,52 +203,120 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div className="flex-1 px-4 py-6">
-          <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Actions</h3>
+          <h3 className="text-sm font-semibold text-slate-900 mb-4">Analysis Tools</h3>
           <div className="space-y-3">
-            <Button 
-              onClick={() => exportMutation.mutate('csv')}
-              disabled={exportMutation.isPending}
-              className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {exportMutation.isPending ? 'Exporting...' : 'Export CSV'}
-            </Button>
-            
-            <Button 
-              onClick={() => {
-                queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
-                queryClient.invalidateQueries({ queryKey: ['/api/creators'] });
-                toast({ title: "Data refreshed successfully" });
-              }}
-              variant="outline"
-              className="w-full justify-start"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh Data
-            </Button>
+            <Link href="/workflow">
+              <Button 
+                variant="default"
+                className="w-full justify-start bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                <Workflow className="w-4 h-4 mr-2" />
+                Workflow Builder
+              </Button>
+            </Link>
+
+            <Link href="/data-science">
+              <Button 
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Data Science Analyzer
+              </Button>
+            </Link>
+
+            <Link href="/enhanced-search">
+              <Button 
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <Search className="w-4 h-4 mr-2" />
+                Enhanced Search
+              </Button>
+            </Link>
+
+            <Link href="/analytics">
+              <Button 
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Creator Analytics
+              </Button>
+            </Link>
+
+            <Link href="/trends">
+              <Button 
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Trends Analysis
+              </Button>
+            </Link>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Actions</h3>
+            <div className="space-y-3">
+              <Button 
+                onClick={() => exportMutation.mutate('csv')}
+                disabled={exportMutation.isPending}
+                className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {exportMutation.isPending ? 'Exporting...' : 'Export CSV'}
+              </Button>
+              
+              <Button 
+                onClick={() => {
+                  queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+                  queryClient.invalidateQueries({ queryKey: ['/api/creators'] });
+                  toast({ title: "Data refreshed successfully" });
+                }}
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh Data
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Subreddit Status */}
+        {/* Subreddits */}
         <div className="p-4 border-t border-slate-200">
-          <h4 className="text-sm font-semibold text-slate-900 mb-3">Subreddit Status</h4>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">LocalLLMs</span>
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">MachineLearning</span>
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">datascience</span>
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">ArtificialIntelligence</span>
-              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-slate-900">Active Subreddits</h4>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSearchModalOpen(true)}
+              className="text-xs h-6 px-2"
+            >
+              <Search className="w-3 h-3 mr-1" />
+              Add
+            </Button>
+          </div>
+          <div className="space-y-1">
+            {subreddits.map((subreddit) => (
+              <div 
+                key={subreddit.id}
+                className="flex items-center justify-between text-sm p-2 rounded hover:bg-slate-50 cursor-pointer group"
+                onClick={() => handleViewSubreddit(subreddit.name)}
+              >
+                <div className="flex items-center gap-2">
+                  <SiReddit className="w-3 h-3 text-orange-500" />
+                  <span className="text-slate-700 group-hover:text-slate-900">r/{subreddit.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">
+                    {creators.filter(c => c.subreddit === subreddit.name).length}
+                  </span>
+                  <div className={`w-2 h-2 rounded-full ${subreddit.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -260,20 +339,77 @@ export default function Dashboard() {
         </header>
 
         <div className="p-6">
+          {/* Quick Analysis Panel */}
+          <Card className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-slate-900 flex items-center">
+                <BarChart3 className="w-5 h-5 mr-2 text-blue-600" />
+                Quick Analysis Tools
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Link href="/enhanced-search">
+                  <Button className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white flex-col space-y-1">
+                    <Search className="w-6 h-6" />
+                    <span className="text-sm font-medium">Search Communities</span>
+                  </Button>
+                </Link>
+                <Link href="/analytics">
+                  <Button className="w-full h-16 bg-green-600 hover:bg-green-700 text-white flex-col space-y-1">
+                    <Users className="w-6 h-6" />
+                    <span className="text-sm font-medium">Top Creators</span>
+                  </Button>
+                </Link>
+                <Link href="/data-science">
+                  <Button className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white flex-col space-y-1">
+                    <BarChart3 className="w-6 h-6" />
+                    <span className="text-sm font-medium">Data Insights</span>
+                  </Button>
+                </Link>
+                <Link href="/trends">
+                  <Button className="w-full h-16 bg-orange-600 hover:bg-orange-700 text-white flex-col space-y-1">
+                    <TrendingUp className="w-6 h-6" />
+                    <span className="text-sm font-medium">Trend Analysis</span>
+                  </Button>
+                </Link>
+              </div>
+              
+              {/* One-Click Actions */}
+              <div className="mt-6 pt-4 border-t border-blue-200">
+                <p className="text-sm font-medium text-slate-700 mb-3">Popular Subreddits</p>
+                <div className="flex flex-wrap gap-2">
+                  {['datascience', 'MachineLearning', 'artificial', 'Python', 'programming', 'ChatGPT'].map((sub) => (
+                    <Button
+                      key={sub}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewSubreddit(sub)}
+                      className="bg-white hover:bg-blue-50 border-blue-300"
+                    >
+                      <SiReddit className="w-3 h-3 mr-1 text-orange-500" />
+                      r/{sub}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-slate-600 text-sm font-medium">Total Creators</p>
-                    <p className="text-3xl font-bold text-slate-900 mt-1">
+                    <div className="text-slate-600 text-sm font-medium">Total Creators</div>
+                    <div className="text-3xl font-bold text-slate-900 mt-1">
                       {statsLoading ? (
                         <div className="h-8 w-16 bg-slate-200 animate-pulse rounded"></div>
                       ) : (
                         stats?.totalCreators.toLocaleString() || '0'
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                     <Users className="text-blue-600 w-6 h-6" />
@@ -290,14 +426,14 @@ export default function Dashboard() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-slate-600 text-sm font-medium">High Engagement</p>
-                    <p className="text-3xl font-bold text-slate-900 mt-1">
+                    <div className="text-slate-600 text-sm font-medium">High Engagement</div>
+                    <div className="text-3xl font-bold text-slate-900 mt-1">
                       {statsLoading ? (
                         <div className="h-8 w-16 bg-slate-200 animate-pulse rounded"></div>
                       ) : (
                         stats?.highEngagement.toLocaleString() || '0'
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                     <TrendingUp className="text-green-600 w-6 h-6" />
@@ -314,14 +450,14 @@ export default function Dashboard() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-slate-600 text-sm font-medium">Active Subreddits</p>
-                    <p className="text-3xl font-bold text-slate-900 mt-1">
+                    <div className="text-slate-600 text-sm font-medium">Active Subreddits</div>
+                    <div className="text-3xl font-bold text-slate-900 mt-1">
                       {statsLoading ? (
                         <div className="h-8 w-16 bg-slate-200 animate-pulse rounded"></div>
                       ) : (
                         stats?.activeSubreddits || '0'
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
                     <SiReddit className="text-orange-500 w-6 h-6" />
@@ -338,14 +474,14 @@ export default function Dashboard() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-slate-600 text-sm font-medium">Posts Analyzed</p>
-                    <p className="text-3xl font-bold text-slate-900 mt-1">
+                    <div className="text-slate-600 text-sm font-medium">Posts Analyzed</div>
+                    <div className="text-3xl font-bold text-slate-900 mt-1">
                       {statsLoading ? (
                         <div className="h-8 w-16 bg-slate-200 animate-pulse rounded"></div>
                       ) : (
                         stats?.postsAnalyzed.toLocaleString() || '0'
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                     <BarChart3 className="text-purple-600 w-6 h-6" />
@@ -607,6 +743,19 @@ export default function Dashboard() {
         creatorId={selectedCreatorId}
         open={modalOpen}
         onOpenChange={setModalOpen}
+      />
+
+      {/* Subreddit Detail Modal */}
+      <SubredditModal
+        isOpen={subredditModalOpen}
+        onClose={() => setSubredditModalOpen(false)}
+        subredditName={selectedSubreddit}
+      />
+
+      {/* Subreddit Search Modal */}
+      <SubredditSearch
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
       />
     </div>
   );
