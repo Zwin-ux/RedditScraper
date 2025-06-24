@@ -342,7 +342,7 @@ export class RedditScraper {
 
     try {
       const url = `${this.baseUrl}/user/${validatedUsername}/about.json`;
-      const response = await this.makeRequest<{ data: RedditUserProfile }>(url);
+      const response = await this.makeRequest<{ data: any }>(url);
       const executionTime = Date.now() - startTime;
       
       if (!response || !response.data) {
@@ -352,10 +352,21 @@ export class RedditScraper {
         });
       }
       
-      const profile = response.data;
+      const profile: RedditUserProfile = {
+        id: response.data.id,
+        username: response.data.name,
+        createdUtc: response.data.created_utc,
+        linkKarma: response.data.link_karma,
+        commentKarma: response.data.comment_karma,
+        isGold: response.data.is_gold,
+        isMod: response.data.is_mod,
+        verified: response.data.verified,
+        hasVerifiedEmail: response.data.has_verified_email,
+        iconImg: response.data.icon_img || null,
+      };
       
-      // Cache the profile
-      await userProfileCache.set(cacheKey, profile);
+      // Cache the profile with TTL
+      await userProfileCache.set(cacheKey, profile, CACHE_TTL.USER_PROFILE);
       
       const result: ScraperSuccessResult<RedditUserProfile> = {
         data: [profile],
@@ -370,37 +381,6 @@ export class RedditScraper {
       };
       
       return result;
-          code: 'INVALID_RESPONSE'
-        });
-      }
-      
-      const profile: RedditUserProfile = {
-        id: data.data.id,
-        username: data.data.name,
-        createdUtc: data.data.created_utc,
-        linkKarma: data.data.link_karma,
-        commentKarma: data.data.comment_karma,
-        isGold: data.data.is_gold,
-        isMod: data.data.is_mod,
-        verified: data.data.verified,
-        hasVerifiedEmail: data.data.has_verified_email,
-        iconImg: data.data.icon_img,
-      };
-      
-      // Cache the profile
-      await userProfileCache.set(cacheKey, profile, CACHE_TTL.USER_PROFILE);
-      
-      return {
-        data: [profile],
-        metadata: {
-          total: 1,
-          after: null,
-          before: null,
-          pageSize: 1,
-          executionTime,
-          cacheHit: false,
-        }
-      };
     } catch (error) {
       console.error(`Error fetching profile for u/${validatedUsername}:`, error);
       
@@ -409,6 +389,14 @@ export class RedditScraper {
           message: error.message,
           code: error.code || 'EXTERNAL_SERVICE_ERROR',
           details: error.details
+        });
+      }
+      
+      if (error instanceof RateLimitError) {
+        return createErrorResult({
+          message: 'Rate limit exceeded',
+          code: 'RATE_LIMIT_EXCEEDED',
+          details: { retryAfter: error.retryAfter }
         });
       }
       
@@ -565,23 +553,31 @@ export class RedditScraper {
       
       return result;
     } catch (error) {
-      console.error(`Error fetching posts for user ${username}:`, error);
-      return {
-        error: {
-          message: error instanceof Error ? error.message : 'Unknown error occurred',
-          code: 'FETCH_ERROR',
-          details: error
-        },
-        data: [],
-        metadata: {
-          total: 0,
-          after: null,
-          before: null,
-          pageSize: 0,
-          executionTime: 0,
-          cacheHit: false,
-        },
-      };
+      console.error(`Error in searchPosts for r/${subreddit}:`, error);
+      
+      if (error instanceof ExternalServiceError) {
+        return createErrorResult({
+          message: error.message,
+          code: error.code || 'EXTERNAL_SERVICE_ERROR',
+          details: error.details
+        });
+      }
+      
+      if (error instanceof RateLimitError) {
+        return createErrorResult({
+          message: 'Rate limit exceeded. Please try again later.',
+          code: 'RATE_LIMIT_EXCEEDED',
+          details: {
+            retryAfter: error.retryAfter
+          }
+        });
+      }
+      
+      return createErrorResult({
+        message: 'An unknown error occurred while searching for posts',
+        code: 'UNKNOWN_ERROR',
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   }
 }
