@@ -86,6 +86,41 @@ export default function DataScienceAnalyzer() {
         </p>
       </div>
 
+      {/* One-Click Analysis Buttons */}
+      <Card className="bg-purple-50 border-purple-200">
+        <CardContent className="pt-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">One-Click Analysis</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {[
+              { text: "Latest ML Trends", query: "machine learning", icon: TrendingUp },
+              { text: "Python Tools", query: "python data science", icon: Code },
+              { text: "Career Insights", query: "data science jobs", icon: Briefcase },
+              { text: "Research Papers", query: "data science research", icon: FileText },
+              { text: "Industry News", query: "data science news", icon: Newspaper },
+              { text: "Beginner Resources", query: "data science learning", icon: BookOpen }
+            ].map((item) => (
+              <Button
+                key={item.text}
+                onClick={() => {
+                  setSearchQuery(item.query);
+                  analyzeDataScience.mutate({
+                    query: item.query,
+                    subreddit: 'datascience',
+                    limit: 50
+                  });
+                }}
+                disabled={analyzeDataScience.isPending}
+                className="h-16 bg-white hover:bg-purple-100 border border-purple-200 flex-col space-y-1 text-gray-700"
+                variant="outline"
+              >
+                <item.icon className="w-5 h-5" />
+                <span className="text-sm font-medium">{item.text}</span>
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Search Section */}
       <Card>
         <CardHeader>

@@ -339,6 +339,63 @@ export default function Dashboard() {
         </header>
 
         <div className="p-6">
+          {/* Quick Analysis Panel */}
+          <Card className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-slate-900 flex items-center">
+                <BarChart3 className="w-5 h-5 mr-2 text-blue-600" />
+                Quick Analysis Tools
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Link href="/enhanced-search">
+                  <Button className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white flex-col space-y-1">
+                    <Search className="w-6 h-6" />
+                    <span className="text-sm font-medium">Search Communities</span>
+                  </Button>
+                </Link>
+                <Link href="/analytics">
+                  <Button className="w-full h-16 bg-green-600 hover:bg-green-700 text-white flex-col space-y-1">
+                    <Users className="w-6 h-6" />
+                    <span className="text-sm font-medium">Top Creators</span>
+                  </Button>
+                </Link>
+                <Link href="/data-science">
+                  <Button className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white flex-col space-y-1">
+                    <BarChart3 className="w-6 h-6" />
+                    <span className="text-sm font-medium">Data Insights</span>
+                  </Button>
+                </Link>
+                <Link href="/trends">
+                  <Button className="w-full h-16 bg-orange-600 hover:bg-orange-700 text-white flex-col space-y-1">
+                    <TrendingUp className="w-6 h-6" />
+                    <span className="text-sm font-medium">Trend Analysis</span>
+                  </Button>
+                </Link>
+              </div>
+              
+              {/* One-Click Actions */}
+              <div className="mt-6 pt-4 border-t border-blue-200">
+                <p className="text-sm font-medium text-slate-700 mb-3">Popular Subreddits</p>
+                <div className="flex flex-wrap gap-2">
+                  {['datascience', 'MachineLearning', 'artificial', 'Python', 'programming', 'ChatGPT'].map((sub) => (
+                    <Button
+                      key={sub}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewSubreddit(sub)}
+                      className="bg-white hover:bg-blue-50 border-blue-300"
+                    >
+                      <SiReddit className="w-3 h-3 mr-1 text-orange-500" />
+                      r/{sub}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <Card>

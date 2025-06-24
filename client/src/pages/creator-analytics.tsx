@@ -68,6 +68,52 @@ export default function CreatorAnalytics() {
         </p>
       </div>
 
+      {/* Quick Filter Buttons */}
+      <Card className="bg-green-50 border-green-200">
+        <CardContent className="pt-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Filters</h3>
+          <div className="flex flex-wrap gap-3">
+            {[
+              { label: "Top Performers", filter: { engagementLevel: 'high' } },
+              { label: "Data Science", filter: { subreddit: 'datascience' } },
+              { label: "Machine Learning", filter: { subreddit: 'MachineLearning' } },
+              { label: "Programming", filter: { subreddit: 'programming' } },
+              { label: "High Karma", filter: { search: '' } },
+              { label: "Recent Activity", filter: { search: '' } }
+            ].map((item) => (
+              <Button
+                key={item.label}
+                onClick={() => {
+                  if (item.filter.subreddit) {
+                    setSearchQuery(`subreddit:${item.filter.subreddit}`);
+                  } else if (item.label === "Top Performers") {
+                    setSortBy('engagement');
+                  } else if (item.label === "High Karma") {
+                    setSortBy('karma');
+                  } else if (item.label === "Recent Activity") {
+                    setSortBy('recent');
+                  }
+                }}
+                variant="outline"
+                className="bg-white hover:bg-green-100"
+              >
+                {item.label}
+              </Button>
+            ))}
+            <Button
+              onClick={() => {
+                setSearchQuery('');
+                setSortBy('karma');
+              }}
+              variant="ghost"
+              className="text-gray-600 hover:text-gray-900"
+            >
+              Clear All
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Search and Sort */}
       <Card>
         <CardHeader>

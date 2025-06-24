@@ -156,32 +156,57 @@ export function DashboardChatbot({
             {/* Quick Actions */}
             {messages.length === 1 && (
               <div className="p-3 bg-blue-50 border-b border-gray-200">
-                <p className="text-xs font-medium text-gray-700 mb-2">Quick Searches:</p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {[
-                    "r/MachineLearning",
-                    "r/datascience", 
-                    "r/Python",
-                    "r/artificial"
-                  ].map((query) => (
-                    <button
-                      key={query}
-                      onClick={() => {
-                        setInput(query);
-                        const userMessage: ChatMessage = {
-                          id: Date.now().toString(),
-                          type: 'user',
-                          content: query,
-                          timestamp: new Date()
-                        };
-                        setMessages(prev => [...prev, userMessage]);
-                        defaultChatMutation.mutate(query);
-                      }}
-                      className="text-xs py-1.5 px-2 bg-white border border-gray-300 rounded hover:bg-gray-50 text-left"
-                    >
-                      {query}
-                    </button>
-                  ))}
+                <p className="text-xs font-medium text-gray-700 mb-2">Quick Analysis:</p>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { text: "Top Data Science Creators", query: "show me top creators in data science" },
+                      { text: "Machine Learning Trends", query: "analyze machine learning trends" },
+                      { text: "Python Community Stats", query: "r/Python community overview" },
+                      { text: "AI Research Updates", query: "latest AI research posts" }
+                    ].map((item) => (
+                      <button
+                        key={item.text}
+                        onClick={() => {
+                          const userMessage: ChatMessage = {
+                            id: Date.now().toString(),
+                            type: 'user',
+                            content: item.text,
+                            timestamp: new Date()
+                          };
+                          setMessages(prev => [...prev, userMessage]);
+                          defaultChatMutation.mutate(item.query);
+                        }}
+                        className="text-xs py-2 px-2 bg-white border border-gray-300 rounded hover:bg-blue-50 text-left font-medium"
+                      >
+                        {item.text}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[
+                      "r/datascience",
+                      "r/MachineLearning", 
+                      "r/programming"
+                    ].map((query) => (
+                      <button
+                        key={query}
+                        onClick={() => {
+                          const userMessage: ChatMessage = {
+                            id: Date.now().toString(),
+                            type: 'user',
+                            content: query,
+                            timestamp: new Date()
+                          };
+                          setMessages(prev => [...prev, userMessage]);
+                          defaultChatMutation.mutate(query);
+                        }}
+                        className="text-xs py-1.5 px-2 bg-gray-100 border border-gray-200 rounded hover:bg-gray-200 text-center"
+                      >
+                        {query}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
