@@ -29,7 +29,20 @@ export interface EnhancedSearchResult {
   aiAnalysis?: any;
 }
 
+// Cache for storing search results
+const searchCache = new Map<string, { data: EnhancedSearchResult; timestamp: number }>();
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
 class ExaSearchService {
+  private pendingRequests = new Map<string, Promise<EnhancedSearchResult>>();
+  
+  private getCacheKey(query: string, options: any): string {
+    return `${query}_${JSON.stringify(options)}`;
+  }
+  
+  private isValidCache(timestamp: number): boolean {
+    return Date.now() - timestamp < CACHE_DURATION;
+  }
   
   async searchRedditContent(query: string, options: {
     numResults?: number;
@@ -38,7 +51,36 @@ class ExaSearchService {
     endPublishedDate?: string;
     category?: string;
   } = {}): Promise<EnhancedSearchResult> {
+    const cacheKey = this.getCacheKey(query, options);
     
+    // Check cache first
+    const cached = searchCache.get(cacheKey);
+    if (cached && this.isValidCache(cached.timestamp)) {
+      console.log(`Cache hit for: "${query}"`);
+      return cached.data;
+    }
+    
+    // Check if request is already pending
+    if (this.pendingRequests.has(cacheKey)) {
+      console.log(`Reusing pending request for: "${query}"`);
+      return this.pendingRequests.get(cacheKey)!;
+    }
+    
+    // Create new request
+    const requestPromise = this.performSearch(query, options);
+    this.pendingRequests.set(cacheKey, requestPromise);
+    
+    try {
+      const result = await requestPromise;
+      // Cache the result
+      searchCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      return result;
+    } finally {
+      this.pendingRequests.delete(cacheKey);
+    }
+  }
+  
+  private async performSearch(query: string, options: any): Promise<EnhancedSearchResult> {
     try {
       const searchQuery = `${query} site:reddit.com`;
       

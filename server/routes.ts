@@ -1281,25 +1281,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         targetSubreddit = subredditMapping[targetSubreddit.toLowerCase()] || targetSubreddit;
         
         try {
-          console.log(`Performing comprehensive Exa search for r/${targetSubreddit}`);
+          console.log(`Performing efficient Exa search for r/${targetSubreddit}`);
           
-          // Perform multiple searches for comprehensive data
-          const [communitySearch, trendingSearch] = await Promise.allSettled([
-            exaSearchService.searchBySubreddit(targetSubreddit, 'community overview discussions', 'month'),
-            exaSearchService.searchRedditContent(`r/${targetSubreddit} trending popular posts`, { 
-              numResults: 15, 
-              startPublishedDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() 
-            })
-          ]);
+          // Use single optimized search instead of multiple calls
+          const searchResult = await exaSearchService.searchBySubreddit(
+            targetSubreddit, 
+            'community overview trending posts discussions', 
+            'month'
+          );
 
-          let mainResult = null;
-          if (communitySearch.status === 'fulfilled' && communitySearch.value.results.length > 0) {
-            mainResult = communitySearch.value;
-          } else if (trendingSearch.status === 'fulfilled' && trendingSearch.value.results.length > 0) {
-            mainResult = trendingSearch.value;
-          }
-          
-          if (mainResult && mainResult.results.length > 0) {
+          if (searchResult && searchResult.results.length > 0) {
+            const mainResult = searchResult;
             const keywords = mainResult.insights.topKeywords.slice(0, 10);
             const contentTypes = mainResult.insights.contentTypes;
             const relatedSubs = mainResult.insights.popularSubreddits.filter(sub => sub !== targetSubreddit);
