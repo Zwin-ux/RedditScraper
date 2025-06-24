@@ -134,7 +134,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-Your Name - [@yourtwitter](https://twitter.com/yourtwitter) - your.email@example.com
+FOR DREAMABLE/SHIMMER PROJECT
 
 Project Link: [https://github.com/Zwin-ux/RedditScraper](https://github.com/Zwin-ux/RedditScraper)
 
